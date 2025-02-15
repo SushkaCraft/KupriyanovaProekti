@@ -1,414 +1,372 @@
+import sqlite3
 import tkinter as tk
 from tkinter import ttk, messagebox
-import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from tkintermapview import TkinterMapView
+from tkcalendar import DateEntry
 
-
-def connect_db():
-    return sqlite3.connect('fitness_club.db')
-
-
-def create_tables():
-    conn = connect_db()
-    cursor = conn.cursor()
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS clients (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        phone TEXT NOT NULL,
-                        age INTEGER NOT NULL)''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS subscriptions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL,
-                        type TEXT CHECK(type IN ('дневной', 'вечерний', 'безлимитный')),
-                        duration INTEGER NOT NULL,
-                        price REAL NOT NULL,
-                        start_time TEXT,
-                        end_time TEXT)''')
-
-    cursor.execute('''CREATE TABLE IF NOT EXISTS purchases (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        client_id INTEGER,
-                        subscription_id INTEGER,
-                        purchase_date TEXT,
-                        discount REAL DEFAULT 0,
-                        FOREIGN KEY(client_id) REFERENCES clients(id),
-                        FOREIGN KEY(subscription_id) REFERENCES subscriptions(id))''')
-    
+def create_database():
+    conn = sqlite3.connect('bakery.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS menu
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  name TEXT, 
+                  price REAL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS orders
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  item_id INTEGER, 
+                  quantity INTEGER, 
+                  status TEXT,
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS settings
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  name TEXT, 
+                  address TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS markers
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT,
+                  lat REAL,
+                  lon REAL)''')
     conn.commit()
     conn.close()
 
+create_database()
 
-class FitnessApp:
+class BakeryApp:
     def __init__(self, root):
         self.root = root
-        self.root.geometry("1280x720")
-        self.root.title("Fitness Club Manager")
+        self.root.title("Пекарня Премиум")
+        self.root.geometry("1000x700")
+        
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
         self.configure_styles()
         
         self.notebook = ttk.Notebook(root)
-        self.notebook.pack(expand=True, fill="both", padx=20, pady=20)
-        
-        self.create_members_tab()
-        self.create_subscriptions_tab()
-        self.create_sales_tab()
-        self.create_management_tab()
-        self.create_map_tab()
-        
-        create_tables()
-        self.load_initial_data()
+        self.notebook.pack(fill='both', expand=True)
 
+        self.tabs = {
+            'Меню': ttk.Frame(self.notebook),
+            'Заказы': ttk.Frame(self.notebook),
+            'Карта': ttk.Frame(self.notebook),
+            'Отчеты': ttk.Frame(self.notebook),
+            'Настройки': ttk.Frame(self.notebook)
+        }
+
+        for name, tab in self.tabs.items():
+            self.notebook.add(tab, text=name)
+
+        self.init_menu_tab()
+        self.init_orders_tab()
+        self.init_map_tab()
+        self.init_reports_tab()
+        self.init_settings_tab()
 
     def configure_styles(self):
-        style = ttk.Style()
-        style.theme_use("clam")
-        style.configure("TNotebook.Tab", font=('Arial', 10, 'bold'), padding=10)
-        style.configure("Header.TLabel", font=('Arial', 14, 'bold'), foreground="#2c3e50")
-        style.configure("TButton", font=('Arial', 10), padding=6, background="#3498db", foreground="white")
-        style.configure("Treeview", font=('Arial', 10), rowheight=25)
-        style.configure("Treeview.Heading", font=('Arial', 11, 'bold'))
-        style.map("TButton", background=[('active', '#2980b9')])
+        self.style.configure('TFrame', background='#F8F9FA')
+        self.style.configure('TButton', font=('Arial', 10), padding=5)
+        self.style.configure('TLabel', font=('Arial', 11), background='#F8F9FA')
+        self.style.configure('Header.TLabel', font=('Arial', 14, 'bold'))
+        self.style.map('TButton',
+            foreground=[('active', '!disabled', 'white'), ('!active', 'black')],
+            background=[('active', '#0056b3'), ('!active', '#007BFF')]
+        )
 
+    def init_menu_tab(self):
+        frame = ttk.Frame(self.tabs['Меню'])
+        frame.pack(padx=20, pady=20, fill='both', expand=True)
 
-    def create_members_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Участники")
+        ttk.Label(frame, text="Управление меню", style='Header.TLabel').pack(pady=10)
         
-        frame = ttk.Frame(tab)
-        frame.pack(pady=20, padx=20, fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
-        
-        ttk.Label(frame, text="Управление участниками", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
-        
-        self.members_tree = ttk.Treeview(frame, columns=("ID", "Имя", "Телефон", "Возраст"), show="headings")
-        self.members_tree.grid(row=1, column=0, columnspan=2, pady=10, sticky="nsew")
-        
-        for col in ("ID", "Имя", "Телефон", "Возраст"):
-            self.members_tree.heading(col, text=col)
-            self.members_tree.column(col, width=120, anchor="center")
-            
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
-        
-        ttk.Button(btn_frame, text="Обновить список", command=self.load_members).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Добавить участника", command=self.add_member_dialog).pack(side="left", padx=5)
+        self.menu_tree = ttk.Treeview(frame, columns=('name', 'price'), show='headings')
+        self.menu_tree.heading('name', text='Название')
+        self.menu_tree.heading('price', text='Цена')
+        self.menu_tree.pack(fill='both', expand=True)
 
+        control_frame = ttk.Frame(frame)
+        control_frame.pack(pady=10)
+        
+        ttk.Label(control_frame, text="Название:").pack(side='left')
+        self.item_name = ttk.Entry(control_frame, width=20)
+        self.item_name.pack(side='left', padx=5)
+        
+        ttk.Label(control_frame, text="Цена:").pack(side='left')
+        self.item_price = ttk.Entry(control_frame, width=10)
+        self.item_price.pack(side='left', padx=5)
+        
+        ttk.Button(control_frame, text="Добавить", command=self.add_item).pack(side='left', padx=5)
+        self.load_menu()
 
-    def create_subscriptions_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Абонементы")
-        
-        frame = ttk.Frame(tab)
-        frame.pack(pady=20, padx=20, fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
-        
-        ttk.Label(frame, text="Доступные абонементы", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
-        
-        self.subs_tree = ttk.Treeview(frame, columns=("ID", "Название", "Тип", "Длительность", "Цена"), show="headings")
-        self.subs_tree.grid(row=1, column=0, columnspan=2, pady=10, sticky="nsew")
-        
-        for col in ("ID", "Название", "Тип", "Длительность", "Цена"):
-            self.subs_tree.heading(col, text=col)
-            self.subs_tree.column(col, width=120, anchor="center")
-            
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
-        
-        ttk.Button(btn_frame, text="Обновить список", command=self.load_subscriptions).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Добавить абонемент", command=self.add_subscription_dialog).pack(side="left", padx=5)
+    def init_orders_tab(self):
+        frame = ttk.Frame(self.tabs['Заказы'])
+        frame.pack(padx=20, pady=20, fill='both', expand=True)
 
+        ttk.Label(frame, text="Создание заказа", style='Header.TLabel').pack(pady=10)
+        
+        order_frame = ttk.Frame(frame)
+        order_frame.pack(fill='x', pady=10)
+        
+        ttk.Label(order_frame, text="Товар:").pack(side='left')
+        self.order_item = ttk.Combobox(order_frame, state="readonly")
+        self.order_item.pack(side='left', padx=5)
+        
+        ttk.Label(order_frame, text="Количество:").pack(side='left')
+        self.order_quantity = ttk.Entry(order_frame, width=10)
+        self.order_quantity.pack(side='left', padx=5)
+        
+        ttk.Button(order_frame, text="Создать заказ", command=self.create_order).pack(side='left', padx=5)
+        
+        ttk.Label(frame, text="История заказов", style='Header.TLabel').pack(pady=10)
+        
+        self.orders_tree = ttk.Treeview(frame, columns=('id', 'item', 'quantity', 'status', 'time'), show='headings')
+        self.orders_tree.heading('id', text='ID')
+        self.orders_tree.heading('item', text='Товар')
+        self.orders_tree.heading('quantity', text='Количество')
+        self.orders_tree.heading('status', text='Статус')
+        self.orders_tree.heading('time', text='Время заказа')
+        self.orders_tree.pack(fill='both', expand=True)
+        
+        self.load_orders()
+        self.update_order_items()
 
-    def create_sales_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Продажи")
-        
-        frame = ttk.Frame(tab)
-        frame.pack(pady=20, padx=20, fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
-        
-        ttk.Label(frame, text="Активные абонементы", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=3)
-        
-        self.sales_tree = ttk.Treeview(frame, columns=("ID", "Участник", "Абонемент", "Начало", "Окончание", "Осталось"), show="headings")
-        self.sales_tree.grid(row=1, column=0, columnspan=3, pady=10, sticky="nsew")
-        
-        for col in ("ID", "Участник", "Абонемент", "Начало", "Окончание", "Осталось"):
-            self.sales_tree.heading(col, text=col)
-            self.sales_tree.column(col, width=120, anchor="center")
-            
-        ttk.Button(frame, text="Обновить данные", command=self.load_sales).grid(row=2, column=0, pady=10, padx=5)
-        ttk.Button(frame, text="Оформить продажу", command=self.create_sale_dialog).grid(row=2, column=1, pady=10, padx=5)
+    def init_map_tab(self):
+        frame = ttk.Frame(self.tabs['Карта'])
+        frame.pack(padx=20, pady=20, fill='both', expand=True)
 
-
-    def create_management_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Администрирование")
+        ttk.Label(frame, text="Карта точек доставки", style='Header.TLabel').pack(pady=10)
         
-        frame = ttk.Frame(tab)
-        frame.pack(pady=20, padx=20, fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
-        
-        ttk.Label(frame, text="Статистика клуба", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
-        
-        stats_frame = ttk.Frame(frame)
-        stats_frame.grid(row=1, column=0, pady=10)
-        
-        ttk.Label(stats_frame, text="Всего участников:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        self.total_members_label = ttk.Label(stats_frame, text="0")
-        self.total_members_label.grid(row=0, column=1, padx=10, pady=5)
-        
-        ttk.Label(stats_frame, text="Активных абонементов:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        self.active_subs_label = ttk.Label(stats_frame, text="0")
-        self.active_subs_label.grid(row=1, column=1, padx=10, pady=5)
-        
-        ttk.Button(frame, text="Обновить статистику", command=self.update_stats).grid(row=2, column=0, pady=10)
-
-
-    def create_map_tab(self):
-        tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Локация")
-        
-        control_frame = ttk.Frame(tab)
-        control_frame.pack(pady=10, padx=20, fill="x")
-        
-        ttk.Label(control_frame, text="Широта:").grid(row=0, column=0, padx=5)
-        self.lat_entry = ttk.Entry(control_frame, width=15)
-        self.lat_entry.grid(row=0, column=1, padx=5)
-        
-        ttk.Label(control_frame, text="Долгота:").grid(row=0, column=2, padx=5)
-        self.lon_entry = ttk.Entry(control_frame, width=15)
-        self.lon_entry.grid(row=0, column=3, padx=5)
-        
-        ttk.Label(control_frame, text="Название:").grid(row=0, column=4, padx=5)
-        self.marker_text_entry = ttk.Entry(control_frame, width=20)
-        self.marker_text_entry.grid(row=0, column=5, padx=5)
-        
-        ttk.Button(
-            control_frame, 
-            text="Добавить точку", 
-            command=self.add_marker
-        ).grid(row=0, column=6, padx=10)
-        
-        self.map_widget = TkinterMapView(tab, width=1200, height=600)
-        self.map_widget.pack(pady=20, padx=20, fill="both", expand=True)
-        self.map_widget.set_position(55.7558, 37.6173)
+        self.map_widget = TkinterMapView(frame, width=900, height=500)
+        self.map_widget.pack(fill='both', expand=True)
+        self.map_widget.set_position(55.7558, 37.6176)
         self.map_widget.set_zoom(15)
-        self.map_widget.set_marker(55.7558, 37.6173, text="Fitness Club")
+        
+        control_frame = ttk.Frame(frame)
+        control_frame.pack(pady=10)
+        
+        ttk.Label(control_frame, text="Название точки:").pack(side='left')
+        self.marker_name = ttk.Entry(control_frame, width=25)
+        self.marker_name.pack(side='left', padx=5)
+        
+        ttk.Label(control_frame, text="Широта:").pack(side='left')
+        self.marker_lat = ttk.Entry(control_frame, width=10)
+        self.marker_lat.pack(side='left', padx=5)
+        
+        ttk.Label(control_frame, text="Долгота:").pack(side='left')
+        self.marker_lon = ttk.Entry(control_frame, width=10)
+        self.marker_lon.pack(side='left', padx=5)
+        
+        ttk.Button(control_frame, text="Добавить маркер", command=self.add_marker).pack(side='left', padx=5)
+        ttk.Button(control_frame, text="Загрузить маркеры", command=self.load_markers).pack(side='left', padx=5)
 
+    def init_reports_tab(self):
+        frame = ttk.Frame(self.tabs['Отчеты'])
+        frame.pack(padx=20, pady=20, fill='both', expand=True)
 
-    def load_initial_data(self):
-        self.load_members()
-        self.load_subscriptions()
-        self.load_sales()
-        self.update_stats()
+        ttk.Label(frame, text="Генерация отчетов", style='Header.TLabel').pack(pady=10)
+        
+        date_frame = ttk.Frame(frame)
+        date_frame.pack(pady=10)
+        
+        ttk.Label(date_frame, text="С:").pack(side='left')
+        self.start_date = DateEntry(date_frame)
+        self.start_date.pack(side='left', padx=5)
+        
+        ttk.Label(date_frame, text="По:").pack(side='left', padx=5)
+        self.end_date = DateEntry(date_frame)
+        self.end_date.pack(side='left', padx=5)
+        
+        ttk.Button(frame, text="Сгенерировать отчет", command=self.generate_report).pack(pady=5)
+        
+        self.report_text = tk.Text(frame, height=10, width=60)
+        self.report_text.pack(pady=10)
 
+    def init_settings_tab(self):
+        frame = ttk.Frame(self.tabs['Настройки'])
+        frame.pack(padx=20, pady=20, fill='both', expand=True)
 
-    def load_members(self):
-        for row in self.members_tree.get_children():
-            self.members_tree.delete(row)
-            
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name, phone, age FROM clients")
-        for row in cursor.fetchall():
-            self.members_tree.insert("", "end", values=row)
+        ttk.Label(frame, text="Настройки пекарни", style='Header.TLabel').pack(pady=10)
+        
+        ttk.Label(frame, text="Название:").pack()
+        self.setting_name = ttk.Entry(frame, width=30)
+        self.setting_name.pack(pady=5)
+        
+        ttk.Label(frame, text="Адрес:").pack()
+        self.setting_address = ttk.Entry(frame, width=40)
+        self.setting_address.pack(pady=5)
+        
+        ttk.Button(frame, text="Сохранить", command=self.save_settings).pack(pady=10)
+        self.load_settings()
+
+    def load_menu(self):
+        for i in self.menu_tree.get_children():
+            self.menu_tree.delete(i)
+        conn = sqlite3.connect('bakery.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM menu")
+        for row in c.fetchall():
+            self.menu_tree.insert('', 'end', values=(row[1], f"{row[2]} руб."))
         conn.close()
 
+    def add_item(self):
+        name = self.item_name.get()
+        price = self.item_price.get()
+        if name and price:
+            try:
+                conn = sqlite3.connect('bakery.db')
+                c = conn.cursor()
+                c.execute("INSERT INTO menu (name, price) VALUES (?, ?)", (name, float(price)))
+                conn.commit()
+                self.load_menu()
+                self.item_name.delete(0, 'end')
+                self.item_price.delete(0, 'end')
+                self.update_order_items()
+            except ValueError:
+                messagebox.showerror("Ошибка", "Неверный формат цены")
+            finally:
+                conn.close()
+        else:
+            messagebox.showwarning("Ошибка", "Заполните все поля")
 
-    def load_subscriptions(self):
-        for row in self.subs_tree.get_children():
-            self.subs_tree.delete(row)
-            
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name, type, duration, price FROM subscriptions")
-        for row in cursor.fetchall():
-            self.subs_tree.insert("", "end", values=row)
+    def update_order_items(self):
+        conn = sqlite3.connect('bakery.db')
+        c = conn.cursor()
+        c.execute("SELECT name FROM menu")
+        items = [row[0] for row in c.fetchall()]
+        self.order_item['values'] = items
+        if items:
+            self.order_item.current(0)
         conn.close()
 
-
-    def load_sales(self):
-        for row in self.sales_tree.get_children():
-            self.sales_tree.delete(row)
-            
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute('''SELECT p.id, c.name, s.name, p.purchase_date, 
-                        DATE(p.purchase_date, '+'||s.duration||' days'), 
-                        julianday(DATE(p.purchase_date, '+'||s.duration||' days')) - julianday('now') 
-                        FROM purchases p
-                        JOIN clients c ON p.client_id = c.id
-                        JOIN subscriptions s ON p.subscription_id = s.id''')
-        for row in cursor.fetchall():
-            days_left = int(float(row[5])) if row[5] else 0
-            self.sales_tree.insert("", "end", values=(row[0], row[1], row[2], row[3], row[4], days_left))
-        conn.close()
-
-
-    def update_stats(self):
-        conn = connect_db()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT COUNT(*) FROM clients")
-        self.total_members_label.config(text=cursor.fetchone()[0])
-        
-        cursor.execute("SELECT COUNT(*) FROM purchases")
-        self.active_subs_label.config(text=cursor.fetchone()[0])
-        
-        conn.close()
-
-
-    def add_member_dialog(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Добавить участника")
-        
-        ttk.Label(dialog, text="ФИО:").grid(row=0, column=0, padx=10, pady=5)
-        name_entry = ttk.Entry(dialog)
-        name_entry.grid(row=0, column=1, padx=10, pady=5)
-        
-        ttk.Label(dialog, text="Телефон:").grid(row=1, column=0, padx=10, pady=5)
-        phone_entry = ttk.Entry(dialog)
-        phone_entry.grid(row=1, column=1, padx=10, pady=5)
-        
-        ttk.Label(dialog, text="Возраст:").grid(row=2, column=0, padx=10, pady=5)
-        age_entry = ttk.Entry(dialog)
-        age_entry.grid(row=2, column=1, padx=10, pady=5)
-        
-        def save_member():
-            if name_entry.get() and phone_entry.get() and age_entry.get():
-                conn = connect_db()
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO clients (name, phone, age) VALUES (?, ?, ?)", 
-                             (name_entry.get(), phone_entry.get(), age_entry.get()))
+    def create_order(self):
+        item_name = self.order_item.get()
+        quantity = self.order_quantity.get()
+        if item_name and quantity:
+            try:
+                quantity = int(quantity)
+                conn = sqlite3.connect('bakery.db')
+                c = conn.cursor()
+                c.execute("SELECT id FROM menu WHERE name = ?", (item_name,))
+                item_id = c.fetchone()[0]
+                c.execute("INSERT INTO orders (item_id, quantity, status) VALUES (?, ?, 'Новый')", 
+                         (item_id, quantity))
                 conn.commit()
                 conn.close()
-                self.load_members()
-                dialog.destroy()
-            else:
-                messagebox.showerror("Ошибка", "Заполните все поля")
-        
-        ttk.Button(dialog, text="Сохранить", command=save_member).grid(row=3, column=0, columnspan=2, pady=10)
+                self.load_orders()
+                self.order_quantity.delete(0, 'end')
+                messagebox.showinfo("Успех", "Заказ создан")
+            except ValueError:
+                messagebox.showerror("Ошибка", "Неверное количество")
+        else:
+            messagebox.showwarning("Ошибка", "Заполните все поля")
 
-
-    def add_subscription_dialog(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Добавить абонемент")
-        
-        ttk.Label(dialog, text="Название:").grid(row=0, column=0, padx=10, pady=5)
-        name_entry = ttk.Entry(dialog)
-        name_entry.grid(row=0, column=1, padx=10, pady=5)
-        
-        ttk.Label(dialog, text="Тип:").grid(row=1, column=0, padx=10, pady=5)
-        type_combobox = ttk.Combobox(dialog, values=["дневной", "вечерний", "безлимитный"])
-        type_combobox.grid(row=1, column=1, padx=10, pady=5)
-        
-        ttk.Label(dialog, text="Длительность (дней):").grid(row=2, column=0, padx=10, pady=5)
-        duration_entry = ttk.Entry(dialog)
-        duration_entry.grid(row=2, column=1, padx=10, pady=5)
-        
-        ttk.Label(dialog, text="Цена:").grid(row=3, column=0, padx=10, pady=5)
-        price_entry = ttk.Entry(dialog)
-        price_entry.grid(row=3, column=1, padx=10, pady=5)
-        
-        def save_subscription():
-            if all([name_entry.get(), type_combobox.get(), duration_entry.get(), price_entry.get()]):
-                conn = connect_db()
-                cursor = conn.cursor()
-                cursor.execute('''INSERT INTO subscriptions 
-                               (name, type, duration, price) 
-                               VALUES (?, ?, ?, ?)''',
-                               (name_entry.get(), type_combobox.get(), 
-                                duration_entry.get(), price_entry.get()))
-                conn.commit()
-                conn.close()
-                self.load_subscriptions()
-                dialog.destroy()
-            else:
-                messagebox.showerror("Ошибка", "Заполните все поля")
-        
-        ttk.Button(dialog, text="Сохранить", command=save_subscription).grid(row=4, column=0, columnspan=2, pady=10)
-
-
-    def create_sale_dialog(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Оформить продажу")
-        
-        ttk.Label(dialog, text="Участник:").grid(row=0, column=0, padx=10, pady=5)
-        client_combobox = ttk.Combobox(dialog)
-        client_combobox.grid(row=0, column=1, padx=10, pady=5)
-        
-        ttk.Label(dialog, text="Абонемент:").grid(row=1, column=0, padx=10, pady=5)
-        sub_combobox = ttk.Combobox(dialog)
-        sub_combobox.grid(row=1, column=1, padx=10, pady=5)
-        
-        ttk.Label(dialog, text="Скидка (%):").grid(row=2, column=0, padx=10, pady=5)
-        discount_entry = ttk.Entry(dialog)
-        discount_entry.grid(row=2, column=1, padx=10, pady=5)
-        
-        def load_clients():
-            conn = connect_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM clients")
-            client_combobox['values'] = [row[0] for row in cursor.fetchall()]
-            conn.close()
-            
-        def load_subs():
-            conn = connect_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM subscriptions")
-            sub_combobox['values'] = [row[0] for row in cursor.fetchall()]
-            conn.close()
-            
-        load_clients()
-        load_subs()
-        
-        def process_sale():
-            client = client_combobox.get()
-            subscription = sub_combobox.get()
-            discount = discount_entry.get() or 0
-            
-            if client and subscription:
-                conn = connect_db()
-                cursor = conn.cursor()
-                
-                cursor.execute("SELECT id FROM clients WHERE name = ?", (client,))
-                client_id = cursor.fetchone()[0]
-                
-                cursor.execute("SELECT id FROM subscriptions WHERE name = ?", (subscription,))
-                sub_id = cursor.fetchone()[0]
-                
-                cursor.execute('''INSERT INTO purchases 
-                               (client_id, subscription_id, purchase_date, discount)
-                               VALUES (?, ?, DATE('now'), ?)''',
-                               (client_id, sub_id, discount))
-                conn.commit()
-                conn.close()
-                self.load_sales()
-                self.update_stats()
-                dialog.destroy()
-            else:
-                messagebox.showerror("Ошибка", "Выберите участника и абонемент")
-        
-        ttk.Button(dialog, text="Оформить", command=process_sale).grid(row=3, column=0, columnspan=2, pady=10)
-
+    def load_orders(self):
+        for i in self.orders_tree.get_children():
+            self.orders_tree.delete(i)
+        conn = sqlite3.connect('bakery.db')
+        c = conn.cursor()
+        c.execute('''SELECT orders.id, menu.name, orders.quantity, orders.status, 
+                    strftime('%d.%m.%Y %H:%M', orders.created_at)
+                 FROM orders 
+                 JOIN menu ON orders.item_id = menu.id''')
+        for row in c.fetchall():
+            self.orders_tree.insert('', 'end', values=row)
+        conn.close()
 
     def add_marker(self):
-        lat = self.lat_entry.get()
-        lon = self.lon_entry.get()
-        text = self.marker_text_entry.get()
+        name = self.marker_name.get()
+        lat = self.marker_lat.get()
+        lon = self.marker_lon.get()
+        if name and lat and lon:
+            try:
+                lat = float(lat)
+                lon = float(lon)
+                conn = sqlite3.connect('bakery.db')
+                c = conn.cursor()
+                c.execute("INSERT INTO markers (name, lat, lon) VALUES (?, ?, ?)", 
+                         (name, lat, lon))
+                conn.commit()
+                conn.close()
+                self.map_widget.set_marker(lat, lon, text=name)
+                self.marker_name.delete(0, 'end')
+                self.marker_lat.delete(0, 'end')
+                self.marker_lon.delete(0, 'end')
+            except ValueError:
+                messagebox.showerror("Ошибка", "Неверный формат координат")
+        else:
+            messagebox.showwarning("Ошибка", "Заполните все поля")
+
+    def load_markers(self):
+        conn = sqlite3.connect('bakery.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM markers")
+        for marker in c.fetchall():
+            self.map_widget.set_marker(marker[2], marker[3], text=marker[1])
+        conn.close()
+
+    def generate_report(self):
+        start = self.start_date.get_date()
+        end = self.end_date.get_date()
         
-        try:
-            lat_float = float(lat)
-            lon_float = float(lon)
-            self.map_widget.set_marker(lat_float, lon_float, text=text)
-            self.lat_entry.delete(0, "end")
-            self.lon_entry.delete(0, "end")
-            self.marker_text_entry.delete(0, "end")
-        except ValueError:
-            messagebox.showerror("Ошибка", "Введите корректные координаты (числа)")
+        conn = sqlite3.connect('bakery.db')
+        c = conn.cursor()
+        
+        c.execute('''SELECT COUNT(*) FROM orders 
+                  WHERE date(created_at) BETWEEN ? AND ?''',
+                  (start, end))
+        total_orders = c.fetchone()[0]
+        
+        c.execute('''SELECT SUM(menu.price * orders.quantity) 
+                  FROM orders 
+                  JOIN menu ON orders.item_id = menu.id 
+                  WHERE date(orders.created_at) BETWEEN ? AND ?''',
+                  (start, end))
+        total_revenue = c.fetchone()[0] or 0
+        
+        c.execute('''SELECT menu.name, SUM(orders.quantity) 
+                  FROM orders 
+                  JOIN menu ON orders.item_id = menu.id 
+                  WHERE date(orders.created_at) BETWEEN ? AND ?
+                  GROUP BY menu.name 
+                  ORDER BY 2 DESC LIMIT 3''',
+                  (start, end))
+        popular_items = c.fetchall()
+        
+        report = f"Отчет за период с {start} по {end}:\n\n"
+        report += f"Всего заказов: {total_orders}\n"
+        report += f"Общая выручка: {total_revenue:.2f} руб.\n\n"
+        report += "Самые популярные товары:\n"
+        for item in popular_items:
+            report += f"- {item[0]}: {item[1]} шт.\n"
+        
+        self.report_text.delete(1.0, 'end')
+        self.report_text.insert('end', report)
+        conn.close()
+
+    def load_settings(self):
+        conn = sqlite3.connect('bakery.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM settings WHERE id = 1")
+        settings = c.fetchone()
+        if settings:
+            self.setting_name.insert(0, settings[1])
+            self.setting_address.insert(0, settings[2])
+        conn.close()
+
+    def save_settings(self):
+        name = self.setting_name.get()
+        address = self.setting_address.get()
+        if name and address:
+            conn = sqlite3.connect('bakery.db')
+            c = conn.cursor()
+            c.execute("INSERT OR REPLACE INTO settings (id, name, address) VALUES (1, ?, ?)", 
+                     (name, address))
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Успех", "Настройки сохранены")
+        else:
+            messagebox.showwarning("Ошибка", "Заполните все поля")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = FitnessApp(root)
+    app = BakeryApp(root)
     root.mainloop()
