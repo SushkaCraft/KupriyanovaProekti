@@ -4,8 +4,10 @@ import sqlite3
 from datetime import datetime, timedelta
 from tkintermapview import TkinterMapView
 
+
 def connect_db():
     return sqlite3.connect('fitness_club.db')
+
 
 def create_tables():
     conn = connect_db()
@@ -38,6 +40,7 @@ def create_tables():
     conn.commit()
     conn.close()
 
+
 class FitnessApp:
     def __init__(self, root):
         self.root = root
@@ -57,6 +60,7 @@ class FitnessApp:
         create_tables()
         self.load_initial_data()
 
+
     def configure_styles(self):
         style = ttk.Style()
         style.theme_use("clam")
@@ -67,12 +71,14 @@ class FitnessApp:
         style.configure("Treeview.Heading", font=('Arial', 11, 'bold'))
         style.map("TButton", background=[('active', '#2980b9')])
 
+
     def create_members_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Участники")
         
         frame = ttk.Frame(tab)
         frame.pack(pady=20, padx=20, fill="both", expand=True)
+        frame.columnconfigure(0, weight=1)
         
         ttk.Label(frame, text="Управление участниками", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
         
@@ -88,8 +94,7 @@ class FitnessApp:
         
         ttk.Button(btn_frame, text="Обновить список", command=self.load_members).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Добавить участника", command=self.add_member_dialog).pack(side="left", padx=5)
-        
-        frame.columnconfigure(0, weight=1)
+
 
     def create_subscriptions_tab(self):
         tab = ttk.Frame(self.notebook)
@@ -97,6 +102,7 @@ class FitnessApp:
         
         frame = ttk.Frame(tab)
         frame.pack(pady=20, padx=20, fill="both", expand=True)
+        frame.columnconfigure(0, weight=1)
         
         ttk.Label(frame, text="Доступные абонементы", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
         
@@ -113,12 +119,14 @@ class FitnessApp:
         ttk.Button(btn_frame, text="Обновить список", command=self.load_subscriptions).pack(side="left", padx=5)
         ttk.Button(btn_frame, text="Добавить абонемент", command=self.add_subscription_dialog).pack(side="left", padx=5)
 
+
     def create_sales_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Продажи")
         
         frame = ttk.Frame(tab)
         frame.pack(pady=20, padx=20, fill="both", expand=True)
+        frame.columnconfigure(0, weight=1)
         
         ttk.Label(frame, text="Активные абонементы", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=3)
         
@@ -132,12 +140,14 @@ class FitnessApp:
         ttk.Button(frame, text="Обновить данные", command=self.load_sales).grid(row=2, column=0, pady=10, padx=5)
         ttk.Button(frame, text="Оформить продажу", command=self.create_sale_dialog).grid(row=2, column=1, pady=10, padx=5)
 
+
     def create_management_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Администрирование")
         
         frame = ttk.Frame(tab)
         frame.pack(pady=20, padx=20, fill="both", expand=True)
+        frame.columnconfigure(0, weight=1)
         
         ttk.Label(frame, text="Статистика клуба", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
         
@@ -154,21 +164,45 @@ class FitnessApp:
         
         ttk.Button(frame, text="Обновить статистику", command=self.update_stats).grid(row=2, column=0, pady=10)
 
+
     def create_map_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Локация")
         
-        map_widget = TkinterMapView(tab, width=1200, height=600)
-        map_widget.pack(pady=20, padx=20, fill="both", expand=True)
-        map_widget.set_position(55.7558, 37.6173)
-        map_widget.set_zoom(15)
-        map_widget.set_marker(55.7558, 37.6173, text="Fitness Club")
+        control_frame = ttk.Frame(tab)
+        control_frame.pack(pady=10, padx=20, fill="x")
+        
+        ttk.Label(control_frame, text="Широта:").grid(row=0, column=0, padx=5)
+        self.lat_entry = ttk.Entry(control_frame, width=15)
+        self.lat_entry.grid(row=0, column=1, padx=5)
+        
+        ttk.Label(control_frame, text="Долгота:").grid(row=0, column=2, padx=5)
+        self.lon_entry = ttk.Entry(control_frame, width=15)
+        self.lon_entry.grid(row=0, column=3, padx=5)
+        
+        ttk.Label(control_frame, text="Название:").grid(row=0, column=4, padx=5)
+        self.marker_text_entry = ttk.Entry(control_frame, width=20)
+        self.marker_text_entry.grid(row=0, column=5, padx=5)
+        
+        ttk.Button(
+            control_frame, 
+            text="Добавить точку", 
+            command=self.add_marker
+        ).grid(row=0, column=6, padx=10)
+        
+        self.map_widget = TkinterMapView(tab, width=1200, height=600)
+        self.map_widget.pack(pady=20, padx=20, fill="both", expand=True)
+        self.map_widget.set_position(55.7558, 37.6173)
+        self.map_widget.set_zoom(15)
+        self.map_widget.set_marker(55.7558, 37.6173, text="Fitness Club")
+
 
     def load_initial_data(self):
         self.load_members()
         self.load_subscriptions()
         self.load_sales()
         self.update_stats()
+
 
     def load_members(self):
         for row in self.members_tree.get_children():
@@ -181,6 +215,7 @@ class FitnessApp:
             self.members_tree.insert("", "end", values=row)
         conn.close()
 
+
     def load_subscriptions(self):
         for row in self.subs_tree.get_children():
             self.subs_tree.delete(row)
@@ -191,6 +226,7 @@ class FitnessApp:
         for row in cursor.fetchall():
             self.subs_tree.insert("", "end", values=row)
         conn.close()
+
 
     def load_sales(self):
         for row in self.sales_tree.get_children():
@@ -209,6 +245,7 @@ class FitnessApp:
             self.sales_tree.insert("", "end", values=(row[0], row[1], row[2], row[3], row[4], days_left))
         conn.close()
 
+
     def update_stats(self):
         conn = connect_db()
         cursor = conn.cursor()
@@ -220,6 +257,7 @@ class FitnessApp:
         self.active_subs_label.config(text=cursor.fetchone()[0])
         
         conn.close()
+
 
     def add_member_dialog(self):
         dialog = tk.Toplevel(self.root)
@@ -251,6 +289,7 @@ class FitnessApp:
                 messagebox.showerror("Ошибка", "Заполните все поля")
         
         ttk.Button(dialog, text="Сохранить", command=save_member).grid(row=3, column=0, columnspan=2, pady=10)
+
 
     def add_subscription_dialog(self):
         dialog = tk.Toplevel(self.root)
@@ -289,6 +328,7 @@ class FitnessApp:
                 messagebox.showerror("Ошибка", "Заполните все поля")
         
         ttk.Button(dialog, text="Сохранить", command=save_subscription).grid(row=4, column=0, columnspan=2, pady=10)
+
 
     def create_sale_dialog(self):
         dialog = tk.Toplevel(self.root)
@@ -351,6 +391,22 @@ class FitnessApp:
                 messagebox.showerror("Ошибка", "Выберите участника и абонемент")
         
         ttk.Button(dialog, text="Оформить", command=process_sale).grid(row=3, column=0, columnspan=2, pady=10)
+
+
+    def add_marker(self):
+        lat = self.lat_entry.get()
+        lon = self.lon_entry.get()
+        text = self.marker_text_entry.get()
+        
+        try:
+            lat_float = float(lat)
+            lon_float = float(lon)
+            self.map_widget.set_marker(lat_float, lon_float, text=text)
+            self.lat_entry.delete(0, "end")
+            self.lon_entry.delete(0, "end")
+            self.marker_text_entry.delete(0, "end")
+        except ValueError:
+            messagebox.showerror("Ошибка", "Введите корректные координаты (числа)")
 
 if __name__ == "__main__":
     root = tk.Tk()
