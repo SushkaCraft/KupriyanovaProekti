@@ -4,6 +4,16 @@ import sqlite3
 from datetime import datetime, timedelta
 from tkintermapview import TkinterMapView
 
+COLORS = {
+    "primary": "#2A3D4C",
+    "secondary": "#A1B2B7",
+    "background": "#F1F5F9",
+    "text": "#3C4A55",
+    "success": "#6DBE45",
+    "warning": "#FFBB33",
+    "danger": "#E63946" 
+}
+
 
 def connect_db():
     return sqlite3.connect('fitness_club.db')
@@ -46,9 +56,13 @@ class FitnessApp:
         self.root = root
         self.root.geometry("1280x720")
         self.root.title("Fitness Club Manager")
+        self.root.configure(bg=COLORS["background"])
         self.configure_styles()
         
-        self.notebook = ttk.Notebook(root)
+        self.main_container = ttk.Frame(root)
+        self.main_container.pack(fill="both", expand=True)
+        
+        self.notebook = ttk.Notebook(self.main_container)
         self.notebook.pack(expand=True, fill="both", padx=20, pady=20)
         
         self.create_members_tab()
@@ -64,105 +78,160 @@ class FitnessApp:
     def configure_styles(self):
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("TNotebook.Tab", font=('Arial', 10, 'bold'), padding=10)
-        style.configure("Header.TLabel", font=('Arial', 14, 'bold'), foreground="#2c3e50")
-        style.configure("TButton", font=('Arial', 10), padding=6, background="#3498db", foreground="white")
-        style.configure("Treeview", font=('Arial', 10), rowheight=25)
-        style.configure("Treeview.Heading", font=('Arial', 11, 'bold'))
-        style.map("TButton", background=[('active', '#2980b9')])
+        
+        style.configure(".", background=COLORS["background"], foreground=COLORS["text"])
+        style.configure("TNotebook", background=COLORS["background"], borderwidth=0)
+        style.configure("TNotebook.Tab", 
+                       font=('Arial', 10, 'bold'), 
+                       padding=15,
+                       background=COLORS["secondary"],
+                       foreground="white")
+        style.map("TNotebook.Tab", 
+                 background=[("selected", COLORS["primary"])],
+                 foreground=[("selected", "white")])
+        
+        style.configure("TButton", 
+                       font=('Arial', 10, 'bold'), 
+                       padding=8,
+                       borderwidth=2,
+                       relief="flat",
+                       background=COLORS["primary"],
+                       foreground="white")
+        style.map("TButton", 
+                 background=[('active', COLORS["secondary"]), ('disabled', '#D3D3D3')],
+                 relief=[('active', 'sunken'), ('!active', 'flat')])
+        
+        style.configure("Treeview",
+                       font=('Arial', 10),
+                       rowheight=30,
+                       borderwidth=1,
+                       relief="solid",
+                       fieldbackground=COLORS["background"])
+        style.configure("Treeview.Heading", 
+                       font=('Arial', 11, 'bold'),
+                       background=COLORS["primary"],
+                       foreground="white",
+                       relief="flat")
+        style.map("Treeview.Heading", 
+                 background=[('active', COLORS["secondary"])])
+        
+        style.configure("Header.TLabel", 
+                       font=('Arial', 16, 'bold'), 
+                       foreground=COLORS["primary"],
+                       background=COLORS["background"])
+        style.configure("Secondary.TLabel",
+                       font=('Arial', 12),
+                       foreground=COLORS["text"],
+                       background=COLORS["background"])
+        
+        style.configure("TEntry",
+                        fieldbackground="white",
+                        bordercolor=COLORS["primary"],
+                        lightcolor=COLORS["primary"],
+                        darkcolor=COLORS["primary"])
+        style.map("TEntry",
+                 fieldbackground=[("readonly", "#F0F0F0")])
 
 
     def create_members_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Участники")
         
-        frame = ttk.Frame(tab)
-        frame.pack(pady=20, padx=20, fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
+        header_frame = ttk.Frame(tab)
+        header_frame.pack(fill="x", padx=20, pady=10)
+        ttk.Label(header_frame, text="Управление участниками", style="Header.TLabel").pack(side="left")
         
-        ttk.Label(frame, text="Управление участниками", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
+        content_frame = ttk.Frame(tab)
+        content_frame.pack(fill="both", expand=True, padx=20, pady=10)
         
-        self.members_tree = ttk.Treeview(frame, columns=("ID", "Имя", "Телефон", "Возраст"), show="headings")
-        self.members_tree.grid(row=1, column=0, columnspan=2, pady=10, sticky="nsew")
+        self.members_tree = ttk.Treeview(content_frame, columns=("ID", "Имя", "Телефон", "Возраст"), show="headings")
+        self.members_tree.pack(fill="both", expand=True, pady=10)
         
         for col in ("ID", "Имя", "Телефон", "Возраст"):
             self.members_tree.heading(col, text=col)
             self.members_tree.column(col, width=120, anchor="center")
             
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
+        btn_frame = ttk.Frame(content_frame)
+        btn_frame.pack(pady=10)
         
         ttk.Button(btn_frame, text="Обновить список", command=self.load_members).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Добавить участника", command=self.add_member_dialog).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="Добавить участника", command=self.add_member_dialog, style="Accent.TButton").pack(side="left", padx=5)
 
 
     def create_subscriptions_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Абонементы")
         
-        frame = ttk.Frame(tab)
-        frame.pack(pady=20, padx=20, fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
+        header_frame = ttk.Frame(tab)
+        header_frame.pack(fill="x", padx=20, pady=10)
+        ttk.Label(header_frame, text="Доступные абонементы", style="Header.TLabel").pack(side="left")
         
-        ttk.Label(frame, text="Доступные абонементы", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
+        content_frame = ttk.Frame(tab)
+        content_frame.pack(fill="both", expand=True, padx=20, pady=10)
         
-        self.subs_tree = ttk.Treeview(frame, columns=("ID", "Название", "Тип", "Длительность", "Цена"), show="headings")
-        self.subs_tree.grid(row=1, column=0, columnspan=2, pady=10, sticky="nsew")
+        self.subs_tree = ttk.Treeview(content_frame, columns=("ID", "Название", "Тип", "Длительность", "Цена"), show="headings")
+        self.subs_tree.pack(fill="both", expand=True, pady=10)
         
         for col in ("ID", "Название", "Тип", "Длительность", "Цена"):
             self.subs_tree.heading(col, text=col)
             self.subs_tree.column(col, width=120, anchor="center")
             
-        btn_frame = ttk.Frame(frame)
-        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
+        btn_frame = ttk.Frame(content_frame)
+        btn_frame.pack(pady=10)
         
         ttk.Button(btn_frame, text="Обновить список", command=self.load_subscriptions).pack(side="left", padx=5)
-        ttk.Button(btn_frame, text="Добавить абонемент", command=self.add_subscription_dialog).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="Добавить абонемент", command=self.add_subscription_dialog, style="Accent.TButton").pack(side="left", padx=5)
 
 
     def create_sales_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Продажи")
         
-        frame = ttk.Frame(tab)
-        frame.pack(pady=20, padx=20, fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
+        header_frame = ttk.Frame(tab)
+        header_frame.pack(fill="x", padx=20, pady=10)
+        ttk.Label(header_frame, text="Активные абонементы", style="Header.TLabel").pack(side="left")
         
-        ttk.Label(frame, text="Активные абонементы", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=3)
+        content_frame = ttk.Frame(tab)
+        content_frame.pack(fill="both", expand=True, padx=20, pady=10)
         
-        self.sales_tree = ttk.Treeview(frame, columns=("ID", "Участник", "Абонемент", "Начало", "Окончание", "Осталось"), show="headings")
-        self.sales_tree.grid(row=1, column=0, columnspan=3, pady=10, sticky="nsew")
+        self.sales_tree = ttk.Treeview(content_frame, columns=("ID", "Участник", "Абонемент", "Начало", "Окончание", "Осталось"), show="headings")
+        self.sales_tree.pack(fill="both", expand=True, pady=10)
         
         for col in ("ID", "Участник", "Абонемент", "Начало", "Окончание", "Осталось"):
             self.sales_tree.heading(col, text=col)
             self.sales_tree.column(col, width=120, anchor="center")
             
-        ttk.Button(frame, text="Обновить данные", command=self.load_sales).grid(row=2, column=0, pady=10, padx=5)
-        ttk.Button(frame, text="Оформить продажу", command=self.create_sale_dialog).grid(row=2, column=1, pady=10, padx=5)
+        btn_frame = ttk.Frame(content_frame)
+        btn_frame.pack(pady=10)
+        
+        ttk.Button(btn_frame, text="Обновить данные", command=self.load_sales).pack(side="left", padx=5)
+        ttk.Button(btn_frame, text="Оформить продажу", command=self.create_sale_dialog, style="Accent.TButton").pack(side="left", padx=5)
 
 
     def create_management_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Администрирование")
         
-        frame = ttk.Frame(tab)
-        frame.pack(pady=20, padx=20, fill="both", expand=True)
-        frame.columnconfigure(0, weight=1)
+        header_frame = ttk.Frame(tab)
+        header_frame.pack(fill="x", padx=20, pady=10)
+        ttk.Label(header_frame, text="Статистика клуба", style="Header.TLabel").pack(side="left")
         
-        ttk.Label(frame, text="Статистика клуба", style="Header.TLabel").grid(row=0, column=0, pady=10, columnspan=2)
+        stats_frame = ttk.Frame(tab)
+        stats_frame.pack(fill="both", expand=True, padx=20, pady=20)
         
-        stats_frame = ttk.Frame(frame)
-        stats_frame.grid(row=1, column=0, pady=10)
+        stat_card = ttk.Frame(stats_frame, style="Card.TFrame")
+        stat_card.pack(pady=10, fill="x", padx=20)
+        ttk.Label(stat_card, text="Всего участников:", style="Secondary.TLabel").pack(side="left", padx=10, pady=5)
+        self.total_members_label = ttk.Label(stat_card, text="0", style="Secondary.TLabel", font=('Arial', 14, 'bold'))
+        self.total_members_label.pack(side="left", padx=10)
         
-        ttk.Label(stats_frame, text="Всего участников:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
-        self.total_members_label = ttk.Label(stats_frame, text="0")
-        self.total_members_label.grid(row=0, column=1, padx=10, pady=5)
+        stat_card = ttk.Frame(stats_frame, style="Card.TFrame")
+        stat_card.pack(pady=10, fill="x", padx=20)
+        ttk.Label(stat_card, text="Активных абонементов:", style="Secondary.TLabel").pack(side="left", padx=10, pady=5)
+        self.active_subs_label = ttk.Label(stat_card, text="0", style="Secondary.TLabel", font=('Arial', 14, 'bold'))
+        self.active_subs_label.pack(side="left", padx=10)
         
-        ttk.Label(stats_frame, text="Активных абонементов:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-        self.active_subs_label = ttk.Label(stats_frame, text="0")
-        self.active_subs_label.grid(row=1, column=1, padx=10, pady=5)
-        
-        ttk.Button(frame, text="Обновить статистику", command=self.update_stats).grid(row=2, column=0, pady=10)
+        ttk.Button(stats_frame, text="Обновить статистику", command=self.update_stats).pack(pady=20)
 
 
     def create_map_tab(self):
@@ -172,29 +241,34 @@ class FitnessApp:
         control_frame = ttk.Frame(tab)
         control_frame.pack(pady=10, padx=20, fill="x")
         
-        ttk.Label(control_frame, text="Широта:").grid(row=0, column=0, padx=5)
-        self.lat_entry = ttk.Entry(control_frame, width=15)
+        input_frame = ttk.Frame(control_frame)
+        input_frame.pack(side="left", padx=10)
+        
+        ttk.Label(input_frame, text="Широта:").grid(row=0, column=0, padx=5)
+        self.lat_entry = ttk.Entry(input_frame, width=15)
         self.lat_entry.grid(row=0, column=1, padx=5)
         
-        ttk.Label(control_frame, text="Долгота:").grid(row=0, column=2, padx=5)
-        self.lon_entry = ttk.Entry(control_frame, width=15)
+        ttk.Label(input_frame, text="Долгота:").grid(row=0, column=2, padx=5)
+        self.lon_entry = ttk.Entry(input_frame, width=15)
         self.lon_entry.grid(row=0, column=3, padx=5)
         
-        ttk.Label(control_frame, text="Название:").grid(row=0, column=4, padx=5)
-        self.marker_text_entry = ttk.Entry(control_frame, width=20)
+        ttk.Label(input_frame, text="Название:").grid(row=0, column=4, padx=5)
+        self.marker_text_entry = ttk.Entry(input_frame, width=20)
         self.marker_text_entry.grid(row=0, column=5, padx=5)
         
         ttk.Button(
             control_frame, 
             text="Добавить точку", 
-            command=self.add_marker
-        ).grid(row=0, column=6, padx=10)
+            command=self.add_marker,
+            style="Accent.TButton"
+        ).pack(side="left", padx=10)
         
-        self.map_widget = TkinterMapView(tab, width=1200, height=600)
+        self.map_widget = TkinterMapView(tab, width=1200, height=600, corner_radius=15)
         self.map_widget.pack(pady=20, padx=20, fill="both", expand=True)
         self.map_widget.set_position(55.7558, 37.6173)
         self.map_widget.set_zoom(15)
-        self.map_widget.set_marker(55.7558, 37.6173, text="Fitness Club")
+        marker = self.map_widget.set_marker(55.7558, 37.6173, text="Fitness Club")
+        marker.set_text("Главный фитнес-клуб")
 
 
     def load_initial_data(self):
