@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import sqlite3
 from datetime import datetime
 from tkintermapview import TkinterMapView
@@ -183,19 +183,30 @@ class CoffeeApp:
         input_frame = ttk.Frame(content_frame)
         input_frame.pack(pady=10, fill=tk.X)
         
-        ttk.Label(input_frame, text="ID сотрудника:").grid(row=0, column=0, padx=10, pady=5, sticky=tk.W)
-        self.employee_id_entry = ttk.Entry(input_frame)
-        self.employee_id_entry.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW)
+        ttk.Label(input_frame, text="Сотрудник:").grid(row=0, column=0, padx=10, pady=5, sticky=tk.W)
+        self.employee_combobox = ttk.Combobox(input_frame, state='readonly')
+        self.employee_combobox.grid(row=0, column=1, padx=10, pady=5, sticky=tk.EW)
         
-        ttk.Label(input_frame, text="Сумма заказа:").grid(row=1, column=0, padx=10, pady=5, sticky=tk.W)
-        self.order_amount_entry = ttk.Entry(input_frame)
-        self.order_amount_entry.grid(row=1, column=1, padx=10, pady=5, sticky=tk.EW)
+        ttk.Label(input_frame, text="Товары:").grid(row=1, column=0, padx=10, pady=5, sticky=tk.W)
+        list_frame = ttk.Frame(input_frame)
+        list_frame.grid(row=1, column=1, padx=10, pady=5, sticky=tk.EW)
+        
+        self.items_listbox = tk.Listbox(list_frame, selectmode=tk.MULTIPLE, height=5, exportselection=False)
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.items_listbox.yview)
+        self.items_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.items_listbox.config(yscrollcommand=scrollbar.set)
+        
+        ttk.Label(input_frame, text="Сумма заказа:").grid(row=2, column=0, padx=10, pady=5, sticky=tk.W)
+        self.order_amount_var = tk.StringVar()
+        self.order_amount_entry = ttk.Entry(input_frame, textvariable=self.order_amount_var, state='readonly')
+        self.order_amount_entry.grid(row=2, column=1, padx=10, pady=5, sticky=tk.EW)
         
         btn_frame = ttk.Frame(content_frame)
         btn_frame.pack(pady=10)
         
         ttk.Button(btn_frame, text="Добавить заказ", command=self.add_order).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="Обновить список", command=self.update_orders_list).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Обновить списки", command=self.update_order_widgets).pack(side=tk.LEFT, padx=5)
         
         self.orders_tree = ttk.Treeview(content_frame, columns=("ID", "Сотрудник", "Дата Заказа", "Сумма"), show="headings")
         self.orders_tree.heading("ID", text="ID")
@@ -204,8 +215,9 @@ class CoffeeApp:
         self.orders_tree.heading("Сумма", text="Сумма")
         self.orders_tree.pack(fill=tk.BOTH, expand=True, pady=10)
         
-        self.update_orders_list()
-
+        self.update_order_widgets()
+        self.items_listbox.bind('<<ListboxSelect>>', self.calculate_total_amount)
+    
     def create_inventory_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Инвентарь")
@@ -335,20 +347,96 @@ class CoffeeApp:
             self.employee_tree.insert("", tk.END, values=employee)
 
     def add_order(self):
-        employee_id = self.employee_id_entry.get()
+        employee_str = self.employee_combobox.get()
+        if not employee_str:
+            messagebox.showerror("Ошибка", "Выберите сотрудника!")
+            return
+        try:
+            employee_id = int(employee_str.split("ID: ")[1].rstrip(")"))
+        except (IndexError, ValueError):
+            messagebox.showerror("Ошибка", "Некорректный выбор сотрудника!")
+            return
+        
+        selected_items = self.items_listbox.curselection()
+        if not selected_items:
+            messagebox.showerror("Ошибка", "Выберите хотя бы один товар!")
+            return
+        
+        try:
+            total_amount = float(self.order_amount_var.get())
+        except ValueError:
+            messagebox.showerror("Ошибка", "Некорректная сумма заказа!")
+            return
+
+        for idx in selected_items:
+            item_id = self.inventory_items[idx][0]
+            self.cursor.execute("SELECT quantity FROM inventory WHERE id = ?", (item_id,))
+            quantity = self.cursor.fetchone()[0]
+            if quantity <= 0:
+                messagebox.showerror("Ошибка", f"Товар '{self.inventory_items[idx][1]}' отсутствует на складе!")
+                return
+
         order_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        total_amount = self.order_amount_entry.get()
-        self.cursor.execute("INSERT INTO orders (employee_id, order_date, total_amount) VALUES (?, ?, ?)", (employee_id, order_date, total_amount))
-        self.conn.commit()
-        self.update_order_list()
+        try:
+            self.cursor.execute(
+                "INSERT INTO orders (employee_id, order_date, total_amount) VALUES (?, ?, ?)",
+                (employee_id, order_date, total_amount)
+            )
+            order_id = self.cursor.lastrowid
+
+            for idx in selected_items:
+                item_id = self.inventory_items[idx][0]
+                self.cursor.execute("UPDATE inventory SET quantity = quantity - 1 WHERE id = ?", (item_id,))
+            
+            self.conn.commit()
+        except sqlite3.Error as e:
+            messagebox.showerror("Ошибка БД", str(e))
+            return
+        
+        self.update_orders_list()
+        self.update_inventory_list()
+        self.update_order_widgets()
+        self.employee_combobox.set('')
+        self.items_listbox.selection_clear(0, tk.END)
+        self.order_amount_var.set('0.00')
+        messagebox.showinfo("Успех", "Заказ успешно добавлен!")
         
     def update_orders_list(self):
         for row in self.orders_tree.get_children():
             self.orders_tree.delete(row)
-        self.cursor.execute("SELECT orders.id, employees.name, orders.order_date, orders.total_amount FROM orders JOIN employees ON orders.employee_id = employees.id")
+        self.cursor.execute('''
+            SELECT orders.id, employees.name, orders.order_date, orders.total_amount 
+            FROM orders 
+            JOIN employees ON orders.employee_id = employees.id
+        ''')
         orders = self.cursor.fetchall()
         for order in orders:
             self.orders_tree.insert("", tk.END, values=order)
+
+    def update_order_widgets(self):
+        self.update_employee_combobox()
+        self.update_items_listbox()
+        self.update_orders_list()
+
+    def update_employee_combobox(self):
+        self.cursor.execute("SELECT id, name FROM employees")
+        employees = self.cursor.fetchall()
+        employee_list = [f"{name} (ID: {id})" for id, name in employees]
+        self.employee_combobox['values'] = employee_list
+
+    def update_items_listbox(self):
+        self.items_listbox.delete(0, tk.END)
+        self.cursor.execute("SELECT id, item_name, price, quantity FROM inventory WHERE quantity > 0")
+        self.inventory_items = self.cursor.fetchall()
+        for item in self.inventory_items:
+            self.items_listbox.insert(tk.END, f"{item[1]} - {item[2]} руб. (Остаток: {item[3]})")
+            
+    def calculate_total_amount(self, event=None):
+        selected_indices = self.items_listbox.curselection()
+        total = 0.0
+        for idx in selected_indices:
+            total += self.inventory_items[idx][2]
+        self.order_amount_var.set(f"{total:.2f}")
 
     def add_item(self):
         item_name = self.item_name_entry.get()
@@ -365,7 +453,7 @@ class CoffeeApp:
         inventory = self.cursor.fetchall()
         for item in inventory:
             self.inventory_tree.insert("", tk.END, values=item)
-
+            
     def generate_report(self):
         self.cursor.execute("SELECT SUM(total_amount) FROM orders")
         total_amount = self.cursor.fetchone()[0]
@@ -401,25 +489,6 @@ class CoffeeApp:
         for point in points:
             self.map_widget.set_marker(point[2], point[3], text=point[1])
                 
-
-    # def dismiss(window):
-    #     window.grab_release() 
-    #     window.destroy()
-    
-
-    # def click():
-    #     window = Toplevel()
-    #     window.title ("Открыть чат сотрудников")
-    #     window.geometry("450x200")
-    #     window.protocol("WM_DELETE_WINDOW", lambda: dismiss(window)) 
-    #     close_button = ttk.Button(window, text="Закрыть чат", command=lambda: dismiss(window))
-    #     close_button.pack(anchor="center", expand=1)
-    #     window.grab_set()      
- 
-    #     open_button = ttk.Button(text="Создать чат", command=click)
-    #     open_button.pack(anchor="center", expand=1)
-
-
 if __name__ == "__main__":
     root = tk.Tk()
     app = CoffeeApp(root)
