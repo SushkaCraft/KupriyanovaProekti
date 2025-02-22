@@ -1,7 +1,6 @@
 import sqlite3
 import tkinter as tk
-from tkinter import ttk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
 from tkintermapview import TkinterMapView
 
 class FishingShopApp(tk.Tk):
@@ -87,6 +86,7 @@ class FishingShopApp(tk.Tk):
                            (self.product_name.get(), float(self.product_price.get()), int(self.product_quantity.get())))
         self.conn.commit()
         self.update_products_tree()
+        self.update_comboboxes()
 
     def delete_product(self):
         selected = self.products_tree.selection()
@@ -134,6 +134,7 @@ class FishingShopApp(tk.Tk):
                            (self.customer_name.get(), self.customer_phone.get(), self.customer_email.get()))
         self.conn.commit()
         self.update_customers_tree()
+        self.update_comboboxes()
 
     def delete_customer(self):
         selected = self.customers_tree.selection()
