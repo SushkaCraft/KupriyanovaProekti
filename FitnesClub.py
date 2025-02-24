@@ -47,6 +47,12 @@ def create_tables():
                         FOREIGN KEY(client_id) REFERENCES clients(id),
                         FOREIGN KEY(subscription_id) REFERENCES subscriptions(id))''')
     
+    cursor.execute('''CREATE TABLE IF NOT EXISTS markers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        latitude REAL NOT NULL,
+                        longitude REAL NOT NULL,
+                        text TEXT)''')
+    
     conn.commit()
     conn.close()
 
@@ -276,6 +282,7 @@ class FitnessApp:
         self.load_subscriptions()
         self.load_sales()
         self.update_stats()
+        self.load_markers()
 
 
     def load_members(self):
@@ -475,13 +482,31 @@ class FitnessApp:
         try:
             lat_float = float(lat)
             lon_float = float(lon)
+            
             self.map_widget.set_marker(lat_float, lon_float, text=text)
+            
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute('''INSERT INTO markers (latitude, longitude, text)
+                            VALUES (?, ?, ?)''', (lat_float, lon_float, text))
+            conn.commit()
+            conn.close()
+            
             self.lat_entry.delete(0, "end")
             self.lon_entry.delete(0, "end")
             self.marker_text_entry.delete(0, "end")
         except ValueError:
             messagebox.showerror("Ошибка", "Введите корректные координаты (числа)")
 
+
+    def load_markers(self):
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT latitude, longitude, text FROM markers")
+        for row in cursor.fetchall():
+            self.map_widget.set_marker(row[0], row[1], text=row[2])
+        conn.close()
+        
 if __name__ == "__main__":
     root = tk.Tk()
     app = FitnessApp(root)
