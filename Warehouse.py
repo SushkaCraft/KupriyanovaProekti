@@ -126,21 +126,104 @@ class WarehouseApp:
         right_frame = Frame(tab, bg='#ffffff', bd=2, relief=GROOVE)
         right_frame.pack(side=RIGHT, padx=10, pady=10, fill='both', expand=True)
         
-        self.zones_tree = ttk.Treeview(right_frame, columns=('id', 'name', 'capacity', 'occupied'), 
+        zones_list_frame = Frame(right_frame, bg='#ffffff')
+        zones_list_frame.pack(fill='both', expand=True)
+        
+        self.zones_tree = ttk.Treeview(zones_list_frame, columns=('id', 'name', 'capacity', 'occupied'), 
                                      show='headings')
         self.zones_tree.heading('id', text='ID')
         self.zones_tree.heading('name', text='Название')
         self.zones_tree.heading('capacity', text='Вместимость')
         self.zones_tree.heading('occupied', text='Занято')
+        self.zones_tree.bind('<<TreeviewSelect>>', self.on_zone_selected)
         
-        vsb = ttk.Scrollbar(right_frame, orient="vertical", command=self.zones_tree.yview)
+        vsb = ttk.Scrollbar(zones_list_frame, orient="vertical", command=self.zones_tree.yview)
         self.zones_tree.configure(yscrollcommand=vsb.set)
-        
         self.zones_tree.pack(side=LEFT, fill='both', expand=True)
         vsb.pack(side=RIGHT, fill='y')
         
+        goods_frame = Frame(right_frame, bg='#ffffff', bd=2, relief=GROOVE)
+        goods_frame.pack(fill='both', expand=True)
+        
+        Label(goods_frame, text="Товары в выбранной зоне", font=('Helvetica', 12, 'bold'), 
+             bg='#ffffff').pack(pady=5)
+        
+        self.zone_goods_tree = ttk.Treeview(goods_frame, columns=('id', 'name', 'quantity', 'date'), 
+                                          show='headings')
+        self.zone_goods_tree.heading('id', text='ID')
+        self.zone_goods_tree.heading('name', text='Товар')
+        self.zone_goods_tree.heading('quantity', text='Количество')
+        self.zone_goods_tree.heading('date', text='Дата')
+        
+        goods_vsb = ttk.Scrollbar(goods_frame, orient="vertical", command=self.zone_goods_tree.yview)
+        self.zone_goods_tree.configure(yscrollcommand=goods_vsb.set)
+        self.zone_goods_tree.pack(side=LEFT, fill='both', expand=True)
+        goods_vsb.pack(side=RIGHT, fill='y')
+        
+        delete_btn = ttk.Button(goods_frame, text="Удалить выбранные товары", 
+                              command=self.delete_selected_goods)
+        delete_btn.pack(pady=5)
+        
         self.update_zones_list()
+
+    def on_zone_selected(self, event):
+        selected = self.zones_tree.selection()
+        if not selected:
+            return
+        zone_id = self.zones_tree.item(selected[0], 'values')[0]
+        self.load_zone_goods(zone_id)
     
+    def load_zone_goods(self, zone_id):
+        for item in self.zone_goods_tree.get_children():
+            self.zone_goods_tree.delete(item)
+        
+        goods = self.c.execute('''SELECT id, name, quantity, date_added 
+                               FROM goods WHERE zone_id=?''', (zone_id,)).fetchall()
+        for good in goods:
+            self.zone_goods_tree.insert('', 'end', values=good)
+
+    def delete_selected_goods(self):
+        selected_goods = self.zone_goods_tree.selection()
+        if not selected_goods:
+            messagebox.showwarning("Внимание", "Выберите товары для удаления")
+            return
+        
+        selected_zone = self.zones_tree.selection()
+        if not selected_zone:
+            messagebox.showwarning("Внимание", "Сначала выберите зону")
+            return
+            
+        zone_id = self.zones_tree.item(selected_zone[0], 'values')[0]
+        total_quantity = 0
+        
+        try:
+            goods_to_delete = []
+            for item in selected_goods:
+                goods_id = self.zone_goods_tree.item(item, 'values')[0]
+                quantity = self.zone_goods_tree.item(item, 'values')[2]
+                goods_to_delete.append(goods_id)
+                total_quantity += int(quantity)
+            
+            if not messagebox.askyesno("Подтверждение", f"Удалить {len(goods_to_delete)} товаров?"):
+                return
+                
+            self.c.executemany("DELETE FROM goods WHERE id=?", 
+                             [(gid,) for gid in goods_to_delete])
+            
+            self.c.execute('''UPDATE zones SET occupied = occupied - ?
+                           WHERE id=?''', (total_quantity, zone_id))
+            
+            self.conn.commit()
+            
+            self.load_zone_goods(zone_id)
+            self.update_zones_list()
+            self.update_progress()
+            messagebox.showinfo("Успех", "Товары успешно удалены")
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка при удалении: {str(e)}")
+            self.conn.rollback()
+
     def create_suppliers_tab(self):
         tab = Frame(self.notebook, bg='#f0f0f0')
         self.notebook.add(tab, text="🏭 Поставщики")
@@ -303,24 +386,50 @@ class WarehouseApp:
         zone = self.zone_combo.get()
         quantity = self.goods_quantity.get()
         date = self.goods_date.get_date()
+        
         if not all([name, supplier, zone, quantity]):
             messagebox.showerror("Ошибка", "Заполните все поля")
             return
+        
+        try:
+            quantity = int(quantity)
+            if quantity <= 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Ошибка", "Количество должно быть положительным числом")
+            return
+        
         try:
             supplier_id = self.c.execute("SELECT id FROM suppliers WHERE name=?", (supplier,)).fetchone()[0]
             zone_id = self.c.execute("SELECT id FROM zones WHERE name=?", (zone,)).fetchone()[0]
+            
+            zone_info = self.c.execute("SELECT capacity, occupied FROM zones WHERE id=?", (zone_id,)).fetchone()
+            zone_capacity, zone_occupied = zone_info
+            if zone_occupied + quantity > zone_capacity:
+                messagebox.showerror("Ошибка", "В выбранной зоне недостаточно места")
+                return
+            
+            total_capacity = self.c.execute("SELECT SUM(capacity) FROM zones").fetchone()[0] or 0
+            total_occupied = self.c.execute("SELECT SUM(occupied) FROM zones").fetchone()[0] or 0
+            if (total_occupied + quantity) > total_capacity:
+                messagebox.showerror("Ошибка", "На складе закончилось свободное место")
+                return
+            
             self.c.execute('''INSERT INTO goods 
-                           (name, supplier_id, zone_id, quantity, date_added)
-                           VALUES (?, ?, ?, ?, ?)''',
-                           (name, supplier_id, zone_id, int(quantity), date))
-            self.c.execute("UPDATE zones SET occupied = occupied + ? WHERE id=?", (int(quantity), zone_id))
+                        (name, supplier_id, zone_id, quantity, date_added)
+                        VALUES (?, ?, ?, ?, ?)''',
+                        (name, supplier_id, zone_id, quantity, date))
+            
+            self.c.execute("UPDATE zones SET occupied = occupied + ? WHERE id=?", (quantity, zone_id))
             self.conn.commit()
+            
             self.update_progress()
             self.goods_name.delete(0, END)
             self.goods_quantity.delete(0, END)
-            messagebox.showinfo("Успех", "Товар добавлен")
-        except:
-            messagebox.showerror("Ошибка", "Ошибка при добавлении товара")
+            messagebox.showinfo("Успех", "Товар успешно добавлен")
+            
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка при добавлении товара: {str(e)}")
     
     def generate_report(self):
         start = self.start_date.get_date()
@@ -333,12 +442,14 @@ class WarehouseApp:
             self.report_tree.insert('', END, values=good)
     
     def update_progress(self):
-        total_capacity = self.c.execute("SELECT SUM(capacity) FROM zones").fetchone()[0]
-        total_occupied = self.c.execute("SELECT SUM(occupied) FROM zones").fetchone()[0]
-        if total_capacity and total_occupied:
+        try:
+            total_capacity = self.c.execute("SELECT SUM(capacity) FROM zones").fetchone()[0] or 1
+            total_occupied = self.c.execute("SELECT SUM(occupied) FROM zones").fetchone()[0] or 0
             percent = (total_occupied / total_capacity) * 100
             self.progress['value'] = percent
             self.load_label.config(text=f"Общая загруженность склада: {percent:.1f}%")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка обновления статистики: {str(e)}")
     
     def update_zones_list(self):
         for row in self.zones_tree.get_children():
