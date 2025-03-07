@@ -8,7 +8,7 @@ class WarehouseApp:
     def __init__(self, master):
         self.master = master
         self.master.title("Управление складом")
-        self.master.geometry("1000x700")
+        self.master.geometry("1320x720")
         self.master.configure(bg='#f0f0f0')
         
         self.style = ttk.Style()
@@ -160,9 +160,9 @@ class WarehouseApp:
         self.zone_goods_tree.pack(side=LEFT, fill='both', expand=True)
         goods_vsb.pack(side=RIGHT, fill='y')
         
-        delete_btn = ttk.Button(goods_frame, text="Удалить выбранные товары", 
+        delete_btn = ttk.Button(goods_frame, text="Удалить выбранные\nтовары", 
                               command=self.delete_selected_goods)
-        delete_btn.pack(pady=5)
+        delete_btn.pack(padx=5)
         
         self.update_zones_list()
 
@@ -477,3 +477,4 @@ if __name__ == "__main__":
     root = Tk()
     app = WarehouseApp(root)
     root.mainloop()
+    
