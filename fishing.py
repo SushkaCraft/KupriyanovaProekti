@@ -1,7 +1,6 @@
 import sqlite3
 import tkinter as tk
 from tkinter import ttk, messagebox
-from tkintermapview import TkinterMapView
 
 class FishingShopApp(tk.Tk):
     def __init__(self):
@@ -24,14 +23,23 @@ class FishingShopApp(tk.Tk):
         self.conn = sqlite3.connect("shop.db")
         self.cursor = self.conn.cursor()
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS products 
-                            (id INTEGER PRIMARY KEY, name TEXT, price REAL, quantity INTEGER)""")
+                            (id INTEGER PRIMARY KEY, 
+                             name TEXT, 
+                             price REAL, 
+                             quantity INTEGER,
+                             supplier_id INTEGER)""")
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS customers 
                             (id INTEGER PRIMARY KEY, name TEXT, phone TEXT, email TEXT)""")
         self.cursor.execute("""CREATE TABLE IF NOT EXISTS orders 
-                            (id INTEGER PRIMARY KEY, customer_id INTEGER, product_id INTEGER, 
-                            quantity INTEGER, date TEXT)""")
-        self.cursor.execute("""CREATE TABLE IF NOT EXISTS map_points 
-                            (id INTEGER PRIMARY KEY, name TEXT, lat REAL, lon REAL)""")
+                            (id INTEGER PRIMARY KEY, 
+                             customer_id INTEGER, 
+                             product_id INTEGER, 
+                             quantity INTEGER, 
+                             date TEXT)""")
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS suppliers 
+                            (id INTEGER PRIMARY KEY, 
+                             name TEXT, 
+                             contact TEXT)""")
         self.conn.commit()
 
     def create_widgets(self):
@@ -40,23 +48,24 @@ class FishingShopApp(tk.Tk):
         self.tab_products = ttk.Frame(self.notebook)
         self.tab_customers = ttk.Frame(self.notebook)
         self.tab_orders = ttk.Frame(self.notebook)
-        self.tab_map = ttk.Frame(self.notebook)
+        self.tab_suppliers = ttk.Frame(self.notebook)
         
         self.notebook.add(self.tab_products, text="Товары")
         self.notebook.add(self.tab_customers, text="Клиенты")
         self.notebook.add(self.tab_orders, text="Заказы")
-        self.notebook.add(self.tab_map, text="Карта")
+        self.notebook.add(self.tab_suppliers, text="Поставщики")
         self.notebook.pack(expand=True, fill="both")
 
         self.create_products_tab()
         self.create_customers_tab()
         self.create_orders_tab()
-        self.create_map_tab()
+        self.create_suppliers_tab()
 
     def create_products_tab(self):
         frame = ttk.Frame(self.tab_products)
         frame.pack(pady=10)
 
+        # Поля ввода для товаров
         ttk.Label(frame, text="Название:").grid(row=0, column=0, padx=5)
         self.product_name = ttk.Entry(frame, width=25)
         self.product_name.grid(row=0, column=1, padx=5)
@@ -69,38 +78,113 @@ class FishingShopApp(tk.Tk):
         self.product_quantity = ttk.Entry(frame, width=10)
         self.product_quantity.grid(row=0, column=5, padx=5)
 
-        ttk.Button(frame, text="Добавить", command=self.add_product).grid(row=0, column=6, padx=5)
-        ttk.Button(frame, text="Удалить", command=self.delete_product).grid(row=0, column=7, padx=5)
+        ttk.Label(frame, text="Поставщик:").grid(row=0, column=6, padx=5)
+        self.product_supplier = ttk.Combobox(frame, state="readonly", width=20)
+        self.product_supplier.grid(row=0, column=7, padx=5)
 
-        columns = ("id", "name", "price", "quantity")
+        ttk.Button(frame, text="Добавить", command=self.add_product).grid(row=0, column=8, padx=5)
+        ttk.Button(frame, text="Удалить", command=self.delete_product).grid(row=0, column=9, padx=5)
+
+        # Таблица товаров
+        columns = ("id", "name", "price", "quantity", "supplier")
         self.products_tree = ttk.Treeview(self.tab_products, columns=columns, show="headings")
         self.products_tree.heading("id", text="ID")
         self.products_tree.heading("name", text="Название")
         self.products_tree.heading("price", text="Цена")
         self.products_tree.heading("quantity", text="Количество")
+        self.products_tree.heading("supplier", text="Поставщик")
         self.products_tree.pack(fill="both", expand=True, padx=10, pady=10)
         self.update_products_tree()
+        self.update_suppliers_combobox()
 
     def add_product(self):
-        self.cursor.execute("INSERT INTO products (name, price, quantity) VALUES (?, ?, ?)",
-                           (self.product_name.get(), float(self.product_price.get()), int(self.product_quantity.get())))
+        supplier_name = self.product_supplier.get()
+        supplier_id = self.cursor.execute("SELECT id FROM suppliers WHERE name=?", (supplier_name,)).fetchone()
+        
+        if not supplier_id:
+            messagebox.showerror("Ошибка", "Выберите поставщика из списка")
+            return
+            
+        self.cursor.execute("""INSERT INTO products 
+                            (name, price, quantity, supplier_id) 
+                            VALUES (?, ?, ?, ?)""",
+                            (self.product_name.get(), 
+                             float(self.product_price.get()), 
+                             int(self.product_quantity.get()),
+                             supplier_id[0]))
         self.conn.commit()
         self.update_products_tree()
-        self.update_comboboxes()
 
     def delete_product(self):
         selected = self.products_tree.selection()
         if selected:
-            self.cursor.execute("DELETE FROM products WHERE id=?", (self.products_tree.item(selected[0], "values")[0],))
+            self.cursor.execute("DELETE FROM products WHERE id=?", 
+                               (self.products_tree.item(selected[0], "values")[0],))
             self.conn.commit()
             self.update_products_tree()
 
     def update_products_tree(self):
         for row in self.products_tree.get_children():
             self.products_tree.delete(row)
-        for row in self.cursor.execute("SELECT * FROM products"):
+            
+        query = """SELECT p.id, p.name, p.price, p.quantity, s.name 
+                 FROM products p 
+                 LEFT JOIN suppliers s ON p.supplier_id = s.id"""
+        for row in self.cursor.execute(query):
             self.products_tree.insert("", "end", values=row)
 
+    def create_suppliers_tab(self):
+        frame = ttk.Frame(self.tab_suppliers)
+        frame.pack(pady=10)
+
+        # Поля ввода для поставщиков
+        ttk.Label(frame, text="Название:").grid(row=0, column=0, padx=5)
+        self.supplier_name = ttk.Entry(frame, width=25)
+        self.supplier_name.grid(row=0, column=1, padx=5)
+
+        ttk.Label(frame, text="Контакты:").grid(row=0, column=2, padx=5)
+        self.supplier_contact = ttk.Entry(frame, width=30)
+        self.supplier_contact.grid(row=0, column=3, padx=5)
+
+        ttk.Button(frame, text="Добавить", command=self.add_supplier).grid(row=0, column=4, padx=5)
+        ttk.Button(frame, text="Удалить", command=self.delete_supplier).grid(row=0, column=5, padx=5)
+
+        # Таблица поставщиков
+        columns = ("id", "name", "contact")
+        self.suppliers_tree = ttk.Treeview(self.tab_suppliers, columns=columns, show="headings")
+        self.suppliers_tree.heading("id", text="ID")
+        self.suppliers_tree.heading("name", text="Название")
+        self.suppliers_tree.heading("contact", text="Контакты")
+        self.suppliers_tree.pack(fill="both", expand=True, padx=10, pady=10)
+        self.update_suppliers_tree()
+
+    def add_supplier(self):
+        self.cursor.execute("INSERT INTO suppliers (name, contact) VALUES (?, ?)",
+                           (self.supplier_name.get(), self.supplier_contact.get()))
+        self.conn.commit()
+        self.update_suppliers_tree()
+        self.update_suppliers_combobox()
+
+    def delete_supplier(self):
+        selected = self.suppliers_tree.selection()
+        if selected:
+            self.cursor.execute("DELETE FROM suppliers WHERE id=?", 
+                               (self.suppliers_tree.item(selected[0], "values")[0],))
+            self.conn.commit()
+            self.update_suppliers_tree()
+            self.update_suppliers_combobox()
+
+    def update_suppliers_tree(self):
+        for row in self.suppliers_tree.get_children():
+            self.suppliers_tree.delete(row)
+        for row in self.cursor.execute("SELECT * FROM suppliers"):
+            self.suppliers_tree.insert("", "end", values=row)
+
+    def update_suppliers_combobox(self):
+        suppliers = [row[1] for row in self.cursor.execute("SELECT * FROM suppliers")]
+        self.product_supplier["values"] = suppliers
+
+    # Остальные методы (для клиентов и заказов) остаются без изменений
     def create_customers_tab(self):
         frame = ttk.Frame(self.tab_customers)
         frame.pack(pady=10)
@@ -201,40 +285,6 @@ class FishingShopApp(tk.Tk):
                  JOIN products p ON o.product_id = p.id"""
         for row in self.cursor.execute(query):
             self.orders_tree.insert("", "end", values=row)
-
-    def create_map_tab(self):
-        self.map_widget = TkinterMapView(self.tab_map, width=900, height=500)
-        self.map_widget.set_position(55.7558, 37.6173)
-        self.map_widget.set_zoom(10)
-        self.map_widget.pack(pady=10)
-
-        frame = ttk.Frame(self.tab_map)
-        frame.pack(pady=5)
-
-        ttk.Label(frame, text="Название:").grid(row=0, column=0, padx=5)
-        self.point_name = ttk.Entry(frame, width=20)
-        self.point_name.grid(row=0, column=1, padx=5)
-
-        ttk.Label(frame, text="Широта:").grid(row=0, column=2, padx=5)
-        self.point_lat = ttk.Entry(frame, width=10)
-        self.point_lat.grid(row=0, column=3, padx=5)
-
-        ttk.Label(frame, text="Долгота:").grid(row=0, column=4, padx=5)
-        self.point_lon = ttk.Entry(frame, width=10)
-        self.point_lon.grid(row=0, column=5, padx=5)
-
-        ttk.Button(frame, text="Добавить точку", command=self.add_map_point).grid(row=0, column=6, padx=5)
-        self.load_map_points()
-
-    def add_map_point(self):
-        self.cursor.execute("INSERT INTO map_points (name, lat, lon) VALUES (?, ?, ?)",
-                           (self.point_name.get(), float(self.point_lat.get()), float(self.point_lon.get())))
-        self.conn.commit()
-        self.map_widget.set_marker(float(self.point_lat.get()), float(self.point_lon.get()), text=self.point_name.get())
-
-    def load_map_points(self):
-        for row in self.cursor.execute("SELECT * FROM map_points"):
-            self.map_widget.set_marker(row[2], row[3], text=row[1])
 
 if __name__ == "__main__":
     app = FishingShopApp()
