@@ -2,7 +2,6 @@ import sqlite3
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
-from tkintermapview import TkinterMapView
 from tkcalendar import DateEntry
 
 def create_database():
@@ -11,22 +10,17 @@ def create_database():
     c.execute('''CREATE TABLE IF NOT EXISTS products
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   name TEXT, 
-                  price REAL)''')
+                  price REAL,
+                  description TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS orders
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   product_id INTEGER, 
                   quantity INTEGER, 
                   status TEXT,
                   created_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS settings
+    c.execute('''CREATE TABLE IF NOT EXISTS addresses
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  name TEXT, 
                   address TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS markers
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  name TEXT,
-                  lat REAL,
-                  lon REAL)''')
     conn.commit()
     conn.close()
 
@@ -48,7 +42,6 @@ class JewelryStoreApp:
         self.tabs = {
             'Товары': ttk.Frame(self.notebook),
             'Заказы': ttk.Frame(self.notebook),
-            'Карта': ttk.Frame(self.notebook),
             'Отчеты': ttk.Frame(self.notebook),
             'Настройки': ttk.Frame(self.notebook)
         }
@@ -58,7 +51,6 @@ class JewelryStoreApp:
 
         self.init_products_tab()
         self.init_orders_tab()
-        self.init_map_tab()
         self.init_reports_tab()
         self.init_settings_tab()
 
@@ -78,9 +70,10 @@ class JewelryStoreApp:
 
         ttk.Label(frame, text="Управление товарами", style='Header.TLabel').pack(pady=10)
         
-        self.products_tree = ttk.Treeview(frame, columns=('name', 'price'), show='headings')
+        self.products_tree = ttk.Treeview(frame, columns=('name', 'price', 'description'), show='headings')
         self.products_tree.heading('name', text='Название')
         self.products_tree.heading('price', text='Цена')
+        self.products_tree.heading('description', text='Описание')
         self.products_tree.pack(fill='both', expand=True)
 
         control_frame = ttk.Frame(frame)
@@ -93,6 +86,10 @@ class JewelryStoreApp:
         ttk.Label(control_frame, text="Цена:").pack(side='left')
         self.product_price = ttk.Entry(control_frame, width=10)
         self.product_price.pack(side='left', padx=5)
+        
+        ttk.Label(control_frame, text="Описание:").pack(side='left')
+        self.product_description = ttk.Entry(control_frame, width=30)
+        self.product_description.pack(side='left', padx=5)
         
         ttk.Button(control_frame, text="Добавить", command=self.add_product).pack(side='left', padx=5)
         self.load_products()
@@ -129,35 +126,6 @@ class JewelryStoreApp:
         self.load_orders()
         self.update_order_products()
 
-    def init_map_tab(self):
-        frame = ttk.Frame(self.tabs['Карта'])
-        frame.pack(padx=20, pady=20, fill='both', expand=True)
-
-        ttk.Label(frame, text="Карта магазинов", style='Header.TLabel').pack(pady=10)
-        
-        self.map_widget = TkinterMapView(frame, width=900, height=500)
-        self.map_widget.pack(fill='both', expand=True)
-        self.map_widget.set_position(55.7558, 37.6176)
-        self.map_widget.set_zoom(15)
-        
-        control_frame = ttk.Frame(frame)
-        control_frame.pack(pady=10)
-        
-        ttk.Label(control_frame, text="Название магазина:").pack(side='left')
-        self.marker_name = ttk.Entry(control_frame, width=25)
-        self.marker_name.pack(side='left', padx=5)
-        
-        ttk.Label(control_frame, text="Широта:").pack(side='left')
-        self.marker_lat = ttk.Entry(control_frame, width=10)
-        self.marker_lat.pack(side='left', padx=5)
-        
-        ttk.Label(control_frame, text="Долгота:").pack(side='left')
-        self.marker_lon = ttk.Entry(control_frame, width=10)
-        self.marker_lon.pack(side='left', padx=5)
-        
-        ttk.Button(control_frame, text="Добавить магазин", command=self.add_marker).pack(side='left', padx=5)
-        ttk.Button(control_frame, text="Загрузить магазины", command=self.load_markers).pack(side='left', padx=5)
-
     def init_reports_tab(self):
         frame = ttk.Frame(self.tabs['Отчеты'])
         frame.pack(padx=20, pady=20, fill='both', expand=True)
@@ -184,18 +152,23 @@ class JewelryStoreApp:
         frame = ttk.Frame(self.tabs['Настройки'])
         frame.pack(padx=20, pady=20, fill='both', expand=True)
 
-        ttk.Label(frame, text="Настройки магазина", style='Header.TLabel').pack(pady=10)
+        ttk.Label(frame, text="Управление адресами", style='Header.TLabel').pack(pady=10)
         
-        ttk.Label(frame, text="Название:").pack()
-        self.setting_name = ttk.Entry(frame, width=30)
-        self.setting_name.pack(pady=5)
+        input_frame = ttk.Frame(frame)
+        input_frame.pack(fill='x', pady=5)
         
-        ttk.Label(frame, text="Адрес:").pack()
-        self.setting_address = ttk.Entry(frame, width=40)
-        self.setting_address.pack(pady=5)
+        ttk.Label(input_frame, text="Адрес:").pack(side='left')
+        self.address_entry = ttk.Entry(input_frame, width=40)
+        self.address_entry.pack(side='left', padx=5)
+        ttk.Button(input_frame, text="Добавить адрес", command=self.add_address).pack(side='left', padx=5)
         
-        ttk.Button(frame, text="Сохранить", command=self.save_settings).pack(pady=10)
-        self.load_settings()
+        self.addresses_tree = ttk.Treeview(frame, columns=('address'), show='headings')
+        self.addresses_tree.heading('address', text='Адрес')
+        self.addresses_tree.pack(fill='both', expand=True, pady=10)
+        
+        ttk.Button(frame, text="Удалить выбранный адрес", command=self.delete_address).pack(pady=5)
+        
+        self.load_addresses()
 
     def load_products(self):
         for i in self.products_tree.get_children():
@@ -204,21 +177,24 @@ class JewelryStoreApp:
         c = conn.cursor()
         c.execute("SELECT * FROM products")
         for row in c.fetchall():
-            self.products_tree.insert('', 'end', values=(row[1], f"{row[2]} руб."))
+            self.products_tree.insert('', 'end', values=(row[1], f"{row[2]} руб.", row[3]))
         conn.close()
 
     def add_product(self):
         name = self.product_name.get()
         price = self.product_price.get()
+        description = self.product_description.get()
         if name and price:
             try:
                 conn = sqlite3.connect('jewelry.db')
                 c = conn.cursor()
-                c.execute("INSERT INTO products (name, price) VALUES (?, ?)", (name, float(price)))
+                c.execute("INSERT INTO products (name, price, description) VALUES (?, ?, ?)", 
+                         (name, float(price), description))
                 conn.commit()
                 self.load_products()
                 self.product_name.delete(0, 'end')
                 self.product_price.delete(0, 'end')
+                self.product_description.delete(0, 'end')
                 self.update_order_products()
             except ValueError:
                 messagebox.showerror("Ошибка", "Неверный формат цены")
@@ -272,37 +248,6 @@ class JewelryStoreApp:
             self.orders_tree.insert('', 'end', values=row)
         conn.close()
 
-    def add_marker(self):
-        name = self.marker_name.get()
-        lat = self.marker_lat.get()
-        lon = self.marker_lon.get()
-        if name and lat and lon:
-            try:
-                lat = float(lat)
-                lon = float(lon)
-                conn = sqlite3.connect('jewelry.db')
-                c = conn.cursor()
-                c.execute("INSERT INTO markers (name, lat, lon) VALUES (?, ?, ?)", 
-                         (name, lat, lon))
-                conn.commit()
-                conn.close()
-                self.map_widget.set_marker(lat, lon, text=name)
-                self.marker_name.delete(0, 'end')
-                self.marker_lat.delete(0, 'end')
-                self.marker_lon.delete(0, 'end')
-            except ValueError:
-                messagebox.showerror("Ошибка", "Неверный формат координат")
-        else:
-            messagebox.showwarning("Ошибка", "Заполните все поля")
-
-    def load_markers(self):
-        conn = sqlite3.connect('jewelry.db')
-        c = conn.cursor()
-        c.execute("SELECT * FROM markers")
-        for marker in c.fetchall():
-            self.map_widget.set_marker(marker[2], marker[3], text=marker[1])
-        conn.close()
-
     def generate_report(self):
         start = self.start_date.get_date()
         end = self.end_date.get_date()
@@ -342,29 +287,42 @@ class JewelryStoreApp:
         self.report_text.insert('end', report)
         conn.close()
 
-    def load_settings(self):
-        conn = sqlite3.connect('jewelry.db')
-        c = conn.cursor()
-        c.execute("SELECT * FROM settings WHERE id = 1")
-        settings = c.fetchone()
-        if settings:
-            self.setting_name.insert(0, settings[1])
-            self.setting_address.insert(0, settings[2])
-        conn.close()
-
-    def save_settings(self):
-        name = self.setting_name.get()
-        address = self.setting_address.get()
-        if name and address:
+    def add_address(self):
+        address = self.address_entry.get()
+        if address:
             conn = sqlite3.connect('jewelry.db')
             c = conn.cursor()
-            c.execute("INSERT OR REPLACE INTO settings (id, name, address) VALUES (1, ?, ?)", 
-                     (name, address))
+            c.execute("INSERT INTO addresses (address) VALUES (?)", (address,))
             conn.commit()
             conn.close()
-            messagebox.showinfo("Успех", "Настройки сохранены")
+            self.address_entry.delete(0, 'end')
+            self.load_addresses()
         else:
-            messagebox.showwarning("Ошибка", "Заполните все поля")
+            messagebox.showwarning("Ошибка", "Введите адрес")
+
+    def delete_address(self):
+        selected = self.addresses_tree.selection()
+        if selected:
+            item = self.addresses_tree.item(selected[0])
+            address = item['values'][0]
+            conn = sqlite3.connect('jewelry.db')
+            c = conn.cursor()
+            c.execute("DELETE FROM addresses WHERE address=?", (address,))
+            conn.commit()
+            conn.close()
+            self.load_addresses()
+        else:
+            messagebox.showwarning("Ошибка", "Выберите адрес для удаления")
+
+    def load_addresses(self):
+        for i in self.addresses_tree.get_children():
+            self.addresses_tree.delete(i)
+        conn = sqlite3.connect('jewelry.db')
+        c = conn.cursor()
+        c.execute("SELECT address FROM addresses")
+        for row in c.fetchall():
+            self.addresses_tree.insert('', 'end', values=row)
+        conn.close()
 
 if __name__ == "__main__":
     root = tk.Tk()
