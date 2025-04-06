@@ -2,34 +2,59 @@ import tkinter as tk
 from tkinter import ttk
 import sqlite3
 from datetime import datetime
-from tkintermapview import TkinterMapView
 from tkcalendar import DateEntry
 
-class MotoSalonApp:
+class ModernMotoSalon:
     def __init__(self, root):
         self.root = root
-        self.root.title("Мотосалон")
-        self.root.geometry("1200x800")
-        self.root.minsize(1080, 640)
-        self.root.configure(bg="#f0f0f0")
-
+        self.root.title("Modern MotoSalon")
+        self.root.geometry("1280x800")
+        self.root.minsize(1024, 600)
+        
         self.style = ttk.Style()
         self.style.theme_use("clam")
         
-        self.style.configure("TNotebook", background="#f0f0f0", padding=10)
-        self.style.configure("TNotebook.Tab", font=('Arial', 12, 'bold'), padding=[10, 5], background="#d9d9d9", foreground="#333333")
-        self.style.map("TNotebook.Tab", background=[("selected", "#f0f0f0")], foreground=[("selected", "#000000")])
-
-        self.style.configure("TButton", font=('Arial', 12), padding=8, background="#4CAF50", foreground="white")
-        self.style.map("TButton", background=[("active", "#45a049")])
-
-        self.style.configure("TLabel", font=('Arial', 12), background="#f0f0f0", foreground="#333333")
-        self.style.configure("TEntry", font=('Arial', 12), padding=5, foreground="#333333", fieldbackground="white")
-
-        self.style.configure("Treeview", font=('Arial', 11), background="white", foreground="#333333", fieldbackground="white")
-        self.style.configure("Treeview.Heading", font=('Arial', 12, 'bold'), background="#4CAF50", foreground="white")
-        self.style.map("Treeview", background=[("selected", "#45a049")], foreground=[("selected", "white")])
-
+        self.colors = {
+            'primary': '#2A3F54',
+            'secondary': '#F7F7F7',
+            'accent': '#1ABB9C',
+            'text': '#333333'
+        }
+        
+        self.style.configure('TNotebook', background=self.colors['secondary'])
+        self.style.configure('TNotebook.Tab', 
+                           font=('Segoe UI', 11, 'bold'),
+                           padding=[15, 5],
+                           background=self.colors['primary'],
+                           foreground='white')
+        self.style.map('TNotebook.Tab', 
+                      background=[('selected', self.colors['accent'])])
+        
+        self.style.configure('TFrame', background=self.colors['secondary'])
+        self.style.configure('TLabel', 
+                           font=('Segoe UI', 10),
+                           background=self.colors['secondary'],
+                           foreground=self.colors['text'])
+        self.style.configure('TButton', 
+                           font=('Segoe UI', 10, 'bold'),
+                           background=self.colors['accent'],
+                           foreground='white',
+                           padding=10)
+        self.style.map('TButton', 
+                      background=[('active', '#169F85')])
+        
+        self.style.configure('Treeview', 
+                           font=('Segoe UI', 10),
+                           rowheight=25,
+                           background='white',
+                           fieldbackground='white')
+        self.style.configure('Treeview.Heading', 
+                           font=('Segoe UI', 11, 'bold'),
+                           background=self.colors['primary'],
+                           foreground='white')
+        self.style.map('Treeview', 
+                     background=[('selected', self.colors['accent'])])
+        
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
@@ -37,206 +62,208 @@ class MotoSalonApp:
         self.create_clients_tab()
         self.create_motorcycles_tab()
         self.create_sales_tab()
-        self.create_map_tab()
-
+        self.create_stats_tab()
+        
     def create_tables(self):
         self.conn = sqlite3.connect("moto_salon.db")
         self.cursor = self.conn.cursor()
         
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS clients (
+        tables = [
+            '''CREATE TABLE IF NOT EXISTS clients (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 phone TEXT NOT NULL,
-                reg_date TEXT NOT NULL
-            )
-        ''')
-        
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS motorcycles (
+                reg_date TEXT NOT NULL)''',
+            
+            '''CREATE TABLE IF NOT EXISTS motorcycles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 model TEXT NOT NULL,
                 year INTEGER NOT NULL,
                 price REAL NOT NULL,
-                status TEXT NOT NULL
-            )
-        ''')
-        
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS sales (
+                status TEXT NOT NULL)''',
+            
+            '''CREATE TABLE IF NOT EXISTS sales (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 client_id INTEGER NOT NULL,
                 bike_id INTEGER NOT NULL,
                 sale_date TEXT NOT NULL,
                 amount REAL NOT NULL,
                 FOREIGN KEY(client_id) REFERENCES clients(id),
-                FOREIGN KEY(bike_id) REFERENCES motorcycles(id)
-            )
-        ''')
+                FOREIGN KEY(bike_id) REFERENCES motorcycles(id))'''
+        ]
         
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS locations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                latitude REAL NOT NULL,
-                longitude REAL NOT NULL
-            )
-        ''')
+        for table in tables:
+            self.cursor.execute(table)
+        self.conn.commit()
+
+    def create_input_form(self, parent, fields):
+        form_frame = ttk.Frame(parent)
+        form_frame.pack(fill=tk.X, padx=20, pady=10)
+        
+        entries = {}
+        for i, (field, label) in enumerate(fields.items()):
+            ttk.Label(form_frame, text=label).grid(row=i, column=0, padx=5, pady=5, sticky='e')
+            entry = ttk.Entry(form_frame)
+            entry.grid(row=i, column=1, padx=5, pady=5, sticky='ew')
+            entries[field] = entry
+        
+        if 'status' in fields:
+            entries['status'] = ttk.Combobox(form_frame, values=["В наличии", "Продан"])
+            entries['status'].grid(row=len(fields)-1, column=1, padx=5, pady=5, sticky='ew')
+        
+        return entries
 
     def create_clients_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Клиенты")
         
-        frame = ttk.Frame(tab, padding=10)
-        frame.pack(fill=tk.BOTH, expand=True)
-
-        frame.grid_columnconfigure(1, weight=1)
-        frame.grid_rowconfigure(3, weight=1)  
+        fields = {
+            'name': 'ФИО:',
+            'phone': 'Телефон:'
+        }
+        self.client_entries = self.create_input_form(tab, fields)
         
-        ttk.Label(frame, text="ФИО:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.client_name_entry = ttk.Entry(frame)
-        self.client_name_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Label(frame, text="Телефон:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.client_phone_entry = ttk.Entry(frame)
-        self.client_phone_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Button(frame, text="Добавить клиента", command=self.add_client).grid(row=2, column=0, columnspan=2, pady=10, sticky="ew")
+        btn_frame = ttk.Frame(tab)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="Добавить клиента", command=self.add_client).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Обновить", command=self.update_clients_list).pack(side=tk.LEFT, padx=5)
         
         columns = ("ID", "ФИО", "Телефон", "Дата регистрации")
-        self.clients_tree = ttk.Treeview(frame, columns=columns, show="headings")
+        self.clients_tree = ttk.Treeview(tab, columns=columns, show="headings", height=12)
+        
         for col in columns:
             self.clients_tree.heading(col, text=col)
-            self.clients_tree.column(col, stretch=True)
-
-        self.clients_tree.grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+            self.clients_tree.column(col, width=120, anchor=tk.CENTER)
         
-        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.clients_tree.yview)
+        scrollbar = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.clients_tree.yview)
         self.clients_tree.configure(yscroll=scrollbar.set)
-        scrollbar.grid(row=3, column=2, sticky="ns")
         
-        ttk.Button(frame, text="Обновить", command=self.update_clients_list).grid(row=4, column=0, columnspan=2, pady=5, sticky="ew")
+        self.clients_tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
         self.update_clients_list()
 
     def create_motorcycles_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Мотоциклы")
         
-        frame = ttk.Frame(tab, padding=10)
-        frame.pack(fill=tk.BOTH, expand=True)
-
-        frame.grid_columnconfigure(1, weight=1)
-        frame.grid_rowconfigure(3, weight=1)  
+        fields = {
+            'model': 'Модель:',
+            'year': 'Год выпуска:',
+            'price': 'Цена:',
+            'status': 'Статус:'
+        }
+        self.bike_entries = self.create_input_form(tab, fields)
         
-        ttk.Label(frame, text="Модель:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.bike_model_entry = ttk.Entry(frame)
-        self.bike_model_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Label(frame, text="Год выпуска:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.bike_year_entry = ttk.Entry(frame)
-        self.bike_year_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Label(frame, text="Цена:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
-        self.bike_price_entry = ttk.Entry(frame)
-        self.bike_price_entry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Label(frame, text="Статус:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
-        self.bike_status_combobox = ttk.Combobox(frame, values=["В наличии", "Продан"])
-        self.bike_status_combobox.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Button(frame, text="Добавить мотоцикл", command=self.add_motorcycle).grid(row=4, column=0, columnspan=2, pady=10, sticky="ew")
+        btn_frame = ttk.Frame(tab)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="Добавить мотоцикл", command=self.add_motorcycle).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Обновить", command=self.update_bikes_list).pack(side=tk.LEFT, padx=5)
         
         columns = ("ID", "Модель", "Год", "Цена", "Статус")
-        self.bikes_tree = ttk.Treeview(frame, columns=columns, show="headings")
+        self.bikes_tree = ttk.Treeview(tab, columns=columns, show="headings", height=12)
+        
         for col in columns:
             self.bikes_tree.heading(col, text=col)
-            self.bikes_tree.column(col, stretch=True)
-
-        self.bikes_tree.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+            self.bikes_tree.column(col, width=120, anchor=tk.CENTER)
         
-        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.bikes_tree.yview)
+        scrollbar = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.bikes_tree.yview)
         self.bikes_tree.configure(yscroll=scrollbar.set)
-        scrollbar.grid(row=5, column=2, sticky="ns")
         
-        ttk.Button(frame, text="Обновить", command=self.update_bikes_list).grid(row=6, column=0, columnspan=2, pady=5, sticky="ew")
+        self.bikes_tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
         self.update_bikes_list()
 
     def create_sales_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Продажи")
         
-        frame = ttk.Frame(tab, padding=10)
-        frame.pack(fill=tk.BOTH, expand=True)
-
-        frame.grid_columnconfigure(1, weight=1)
-        frame.grid_rowconfigure(3, weight=1)  
+        form_frame = ttk.Frame(tab)
+        form_frame.pack(fill=tk.X, padx=20, pady=10)
         
-        ttk.Label(frame, text="Клиент (ID):").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.sale_client_entry = ttk.Entry(frame)
-        self.sale_client_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        fields = [
+            ('client_id', 'Клиент (ID):'),
+            ('bike_id', 'Мотоцикл (ID):'),
+            ('amount', 'Сумма:')
+        ]
         
-        ttk.Label(frame, text="Мотоцикл (ID):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.sale_bike_entry = ttk.Entry(frame)
-        self.sale_bike_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.sale_entries = {}
+        for i, (field, label) in enumerate(fields):
+            ttk.Label(form_frame, text=label).grid(row=i, column=0, padx=5, pady=5, sticky='e')
+            entry = ttk.Entry(form_frame)
+            entry.grid(row=i, column=1, padx=5, pady=5, sticky='ew')
+            self.sale_entries[field] = entry
         
-        ttk.Label(frame, text="Дата продажи:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
-        self.sale_date_entry = DateEntry(frame, date_pattern="yyyy-mm-dd")
-        self.sale_date_entry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
+        ttk.Label(form_frame, text="Дата продажи:").grid(row=3, column=0, padx=5, pady=5, sticky='e')
+        self.sale_date = DateEntry(form_frame, date_pattern="yyyy-mm-dd")
+        self.sale_date.grid(row=3, column=1, padx=5, pady=5, sticky='ew')
         
-        ttk.Label(frame, text="Сумма:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
-        self.sale_amount_entry = ttk.Entry(frame)
-        self.sale_amount_entry.grid(row=3, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Button(frame, text="Оформить продажу", command=self.add_sale).grid(row=4, column=0, columnspan=2, pady=10, sticky="ew")
+        btn_frame = ttk.Frame(tab)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="Оформить продажу", command=self.add_sale).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Обновить", command=self.update_sales_list).pack(side=tk.LEFT, padx=5)
         
         columns = ("ID", "Клиент", "Мотоцикл", "Дата", "Сумма")
-        self.sales_tree = ttk.Treeview(frame, columns=columns, show="headings")
+        self.sales_tree = ttk.Treeview(tab, columns=columns, show="headings", height=12)
+        
         for col in columns:
             self.sales_tree.heading(col, text=col)
-            self.sales_tree.column(col, stretch=True)
-        self.sales_tree.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+            self.sales_tree.column(col, width=120, anchor=tk.CENTER)
         
-        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.sales_tree.yview)
+        scrollbar = ttk.Scrollbar(tab, orient=tk.VERTICAL, command=self.sales_tree.yview)
         self.sales_tree.configure(yscroll=scrollbar.set)
-        scrollbar.grid(row=5, column=2, sticky="ns")
         
-        ttk.Button(frame, text="Обновить", command=self.update_sales_list).grid(row=6, column=0, columnspan=2, pady=5, sticky="ew")
+        self.sales_tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
         self.update_sales_list()
 
-    def create_map_tab(self):
+    def create_stats_tab(self):
         tab = ttk.Frame(self.notebook)
-        self.notebook.add(tab, text="Карта")
+        self.notebook.add(tab, text="Статистика")
         
-        frame = ttk.Frame(tab, padding=10)
-        frame.pack(fill=tk.BOTH, expand=True)
+        stats_frame = ttk.Frame(tab)
+        stats_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        
+        stats = [
+            ("Всего клиентов:", "clients"),
+            ("Мотоциклов в наличии:", "motorcycles WHERE status='В наличии'"),
+            ("Проданных мотоциклов:", "motorcycles WHERE status='Продан'"),
+            ("Общая сумма продаж:", "sales")
+        ]
+        
+        self.stats_labels = {}
+        for i, (label, query) in enumerate(stats):
+            frame = ttk.Frame(stats_frame)
+            frame.grid(row=i//2, column=i%2, padx=10, pady=10, sticky='nsew')
+            
+            ttk.Label(frame, text=label, font=('Segoe UI', 12, 'bold')).pack(pady=5)
+            value_label = ttk.Label(frame, text="0", font=('Segoe UI', 14))
+            value_label.pack()
+            self.stats_labels[query] = value_label
+        
+        self.update_stats()
 
-        frame.grid_columnconfigure(1, weight=1)
-        frame.grid_rowconfigure(2, weight=1)  
+    def update_stats(self):
+        queries = {
+            "clients": "SELECT COUNT(*) FROM clients",
+            "motorcycles WHERE status='В наличии'": "SELECT COUNT(*) FROM motorcycles WHERE status='В наличии'",
+            "motorcycles WHERE status='Продан'": "SELECT COUNT(*) FROM motorcycles WHERE status='Продан'",
+            "sales": "SELECT SUM(amount) FROM sales"
+        }
         
-        ttk.Label(frame, text="Название точки:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.location_name_entry = ttk.Entry(frame)
-        self.location_name_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        for query, label in self.stats_labels.items():
+            self.cursor.execute(queries[query])
+            result = self.cursor.fetchone()[0] or 0
+            label.config(text=f"{result:,.2f}" if query == "sales" else result)
         
-        ttk.Label(frame, text="Широта:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.location_lat_entry = ttk.Entry(frame)
-        self.location_lat_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Label(frame, text="Долгота:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
-        self.location_lon_entry = ttk.Entry(frame)
-        self.location_lon_entry.grid(row=2, column=1, padx=5, pady=5, sticky="ew")
-        
-        ttk.Button(frame, text="Добавить точку", command=self.add_location).grid(row=3, column=0, columnspan=2, pady=10, sticky="ew")
-        
-        self.map_widget = TkinterMapView(frame, width=800, height=500)
-        self.map_widget.grid(row=4, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
-        self.map_widget.set_position(55.7558, 37.6176)
-        self.map_widget.set_zoom(10)
-        self.update_map_markers()
+        self.root.after(5000, self.update_stats)
 
     def add_client(self):
         self.cursor.execute("INSERT INTO clients (name, phone, reg_date) VALUES (?, ?, ?)",
-                          (self.client_name_entry.get(),
-                           self.client_phone_entry.get(),
+                          (self.client_entries['name'].get(),
+                           self.client_entries['phone'].get(),
                            datetime.now().strftime("%Y-%m-%d")))
         self.conn.commit()
         self.update_clients_list()
@@ -248,10 +275,10 @@ class MotoSalonApp:
 
     def add_motorcycle(self):
         self.cursor.execute("INSERT INTO motorcycles (model, year, price, status) VALUES (?, ?, ?, ?)",
-                          (self.bike_model_entry.get(),
-                           self.bike_year_entry.get(),
-                           self.bike_price_entry.get(),
-                           self.bike_status_combobox.get()))
+                          (self.bike_entries['model'].get(),
+                           self.bike_entries['year'].get(),
+                           self.bike_entries['price'].get(),
+                           self.bike_entries['status'].get()))
         self.conn.commit()
         self.update_bikes_list()
 
@@ -262,10 +289,10 @@ class MotoSalonApp:
 
     def add_sale(self):
         self.cursor.execute("INSERT INTO sales (client_id, bike_id, sale_date, amount) VALUES (?, ?, ?, ?)",
-                          (self.sale_client_entry.get(),
-                           self.sale_bike_entry.get(),
-                           self.sale_date_entry.get_date(),
-                           self.sale_amount_entry.get()))
+                          (self.sale_entries['client_id'].get(),
+                           self.sale_entries['bike_id'].get(),
+                           self.sale_date.get_date(),
+                           self.sale_entries['amount'].get()))
         self.conn.commit()
         self.update_sales_list()
 
@@ -278,20 +305,7 @@ class MotoSalonApp:
         for row in self.cursor.execute(query):
             self.sales_tree.insert("", tk.END, values=row)
 
-    def add_location(self):
-        self.cursor.execute("INSERT INTO locations (name, latitude, longitude) VALUES (?, ?, ?)",
-                          (self.location_name_entry.get(),
-                           self.location_lat_entry.get(),
-                           self.location_lon_entry.get()))
-        self.conn.commit()
-        self.update_map_markers()
-
-    def update_map_markers(self):
-        self.map_widget.delete_all_marker()
-        for row in self.cursor.execute("SELECT * FROM locations"):
-            self.map_widget.set_marker(row[2], row[3], text=row[1])
-
 if __name__ == "__main__":
     root = tk.Tk()
-    app = MotoSalonApp(root)
+    app = ModernMotoSalon(root)
     root.mainloop()
