@@ -4,6 +4,7 @@ from tkinter import messagebox
 import sqlite3
 from datetime import datetime
 from tkintermapview import TkinterMapView
+from tkcalendar import DateEntry
 
 class FlowerShopApp:
     def __init__(self, root):
@@ -263,12 +264,26 @@ class FlowerShopApp:
         frame.pack(pady=10, padx=10, fill='both', expand=True)
 
         ttk.Label(frame, text="С:").grid(row=0, column=0)
-        self.start_date = ttk.Entry(frame, width=15)
-        self.start_date.grid(row=0, column=1)
+        self.start_date = DateEntry(
+            frame, 
+            width=12, 
+            background='darkblue',
+            foreground='white', 
+            borderwidth=2,
+            date_pattern='y-mm-dd'
+        )
+        self.start_date.grid(row=0, column=1, padx=5)
 
         ttk.Label(frame, text="По:").grid(row=0, column=2)
-        self.end_date = ttk.Entry(frame, width=15)
-        self.end_date.grid(row=0, column=3)
+        self.end_date = DateEntry(
+            frame, 
+            width=12, 
+            background='darkblue',
+            foreground='white', 
+            borderwidth=2,
+            date_pattern='y-mm-dd'
+        )
+        self.end_date.grid(row=0, column=3, padx=5)
 
         btn_frame = ttk.Frame(frame)
         btn_frame.grid(row=1, column=0, columnspan=4, pady=10)
@@ -628,26 +643,36 @@ class FlowerShopApp:
         self.purchase_quantity.delete(0, tk.END)
 
     def generate_sales_report(self):
-        start = self.start_date.get()
-        end = self.end_date.get()
+        start_date_str = self.start_date.get()
+        end_date_str = self.end_date.get()
+        start = f"{start_date_str} 00:00:00"
+        end = f"{end_date_str} 23:59:59"
         try:
             for item in self.report_tree.get_children():
                 self.report_tree.delete(item)
-            self.cursor.execute("SELECT id, 'Продажа', flower_id || ' - ' || quantity || 'шт', sale_date, total_price FROM sales WHERE sale_date BETWEEN ? AND ?",
-                               (start, end))
+            self.cursor.execute("""
+                SELECT id, 'Продажа', flower_id || ' - ' || quantity || 'шт', sale_date, total_price 
+                FROM sales 
+                WHERE sale_date BETWEEN ? AND ?
+            """, (start, end))
             for row in self.cursor.fetchall():
                 self.report_tree.insert('', 'end', values=row)
         except Exception as e:
             messagebox.showerror("Ошибка", str(e))
 
     def generate_purchases_report(self):
-        start = self.start_date.get()
-        end = self.end_date.get()
+        start_date_str = self.start_date.get()
+        end_date_str = self.end_date.get()
+        start = f"{start_date_str} 00:00:00"
+        end = f"{end_date_str} 23:59:59"
         try:
             for item in self.report_tree.get_children():
                 self.report_tree.delete(item)
-            self.cursor.execute("SELECT id, 'Закупка', flower_id || ' - ' || quantity || 'шт', purchase_date, supplier_id FROM purchases WHERE purchase_date BETWEEN ? AND ?",
-                               (start, end))
+            self.cursor.execute("""
+                SELECT id, 'Закупка', flower_id || ' - ' || quantity || 'шт', purchase_date, supplier_id 
+                FROM purchases 
+                WHERE purchase_date BETWEEN ? AND ?
+            """, (start, end))
             for row in self.cursor.fetchall():
                 self.report_tree.insert('', 'end', values=row)
         except Exception as e:
