@@ -233,17 +233,17 @@ class VapeShopApp:
         selected = self.vapes_list_tree.selection()
         if selected:
             item = self.vapes_list_tree.item(selected[0])['values']
-            self.vape_name.delete(0, 'end')
-            self.vape_name.insert(0, item[1])
-            self.vape_price.delete(0, 'end')
-            self.vape_price.insert(0, item[2])
-            self.vape_quantity.delete(0, 'end')
-            self.vape_quantity.insert(0, item[3])
+            self.vape_entries['Название:'].delete(0, 'end')
+            self.vape_entries['Название:'].insert(0, item[1])
+            self.vape_entries['Цена:'].delete(0, 'end')
+            self.vape_entries['Цена:'].insert(0, item[2])
+            self.vape_entries['Количество:'].delete(0, 'end')
+            self.vape_entries['Количество:'].insert(0, item[3])
             
     def add_vape(self):
-        name = self.vape_name.get()
-        price = self.vape_price.get()
-        quantity = self.vape_quantity.get()
+        name = self.vape_entries['Название:'].get()
+        price = self.vape_entries['Цена:'].get()
+        quantity = self.vape_entries['Количество:'].get()
         if not all([name, price, quantity]):
             return
         self.c.execute("INSERT INTO vapes (name, price, quantity) VALUES (?, ?, ?)", 
@@ -257,9 +257,9 @@ class VapeShopApp:
         if not selected:
             return
         item = self.vapes_list_tree.item(selected[0])['values']
-        name = self.vape_name.get()
-        price = self.vape_price.get()
-        quantity = self.vape_quantity.get()
+        name = self.vape_entries['Название:'].get()
+        price = self.vape_entries['Цена:'].get()
+        quantity = self.vape_entries['Количество:'].get()
         if not all([name, price, quantity]):
             return
         self.c.execute("UPDATE vapes SET name=?, price=?, quantity=? WHERE id=?", 
@@ -289,26 +289,26 @@ class VapeShopApp:
         selected = self.liquids_list_tree.selection()
         if selected:
             item = self.liquids_list_tree.item(selected[0])['values']
-            self.liquid_name.delete(0, 'end')
-            self.liquid_name.insert(0, item[1])
-            self.liquid_price.delete(0, 'end')
-            self.liquid_price.insert(0, item[2])
-            self.liquid_flavor.delete(0, 'end')
-            self.liquid_flavor.insert(0, item[3])
-            self.liquid_volume.delete(0, 'end')
-            self.liquid_volume.insert(0, item[4])
-            self.liquid_nicotine.delete(0, 'end')
-            self.liquid_nicotine.insert(0, item[5])
-            self.liquid_quantity.delete(0, 'end')
-            self.liquid_quantity.insert(0, item[6])
+            self.liquid_entries['Название:'].delete(0, 'end')
+            self.liquid_entries['Название:'].insert(0, item[1])
+            self.liquid_entries['Цена:'].delete(0, 'end')
+            self.liquid_entries['Цена:'].insert(0, item[2])
+            self.liquid_entries['Вкус:'].delete(0, 'end')
+            self.liquid_entries['Вкус:'].insert(0, item[3])
+            self.liquid_entries['Объем:'].delete(0, 'end')
+            self.liquid_entries['Объем:'].insert(0, item[4])
+            self.liquid_entries['Никотин:'].delete(0, 'end')
+            self.liquid_entries['Никотин:'].insert(0, item[5])
+            self.liquid_entries['Количество:'].delete(0, 'end')
+            self.liquid_entries['Количество:'].insert(0, item[6])
             
     def add_liquid(self):
-        name = self.liquid_name.get()
-        price = self.liquid_price.get()
-        flavor = self.liquid_flavor.get()
-        volume = self.liquid_volume.get()
-        nicotine = self.liquid_nicotine.get()
-        quantity = self.liquid_quantity.get()
+        name = self.liquid_entries['Название:'].get()
+        price = self.liquid_entries['Цена:'].get()
+        flavor = self.liquid_entries['Вкус:'].get()
+        volume = self.liquid_entries['Объем:'].get()
+        nicotine = self.liquid_entries['Никотин:'].get()
+        quantity = self.liquid_entries['Количество:'].get()
         if not all([name, price, flavor, volume, nicotine, quantity]):
             return
         self.c.execute("INSERT INTO liquids (name, price, flavor, volume, nicotine, quantity) VALUES (?, ?, ?, ?, ?, ?)", 
