@@ -17,14 +17,17 @@ class PharmacyApplication:
         self.medicines_tab = ttk.Frame(self.application_notebook)
         self.sales_management_tab = ttk.Frame(self.application_notebook)
         self.sales_history_tab = ttk.Frame(self.application_notebook)
+        self.statistics_tab = ttk.Frame(self.application_notebook)
 
         self.application_notebook.add(self.medicines_tab, text='Учёт лекарственных средств')
         self.application_notebook.add(self.sales_management_tab, text='Управление продажами')
         self.application_notebook.add(self.sales_history_tab, text='История транзакций')
+        self.application_notebook.add(self.statistics_tab, text='Статистика продаж')
 
         self.create_medicines_management_interface()
         self.create_sales_management_interface()
         self.create_sales_history_interface()
+        self.create_statistics_interface()
         self.refresh_medicines_list()
 
     def configure_styles(self):
@@ -111,8 +114,7 @@ class PharmacyApplication:
         self.transaction_date_picker = DateEntry(sales_container, date_pattern='yyyy-mm-dd')
         self.transaction_date_picker.grid(row=2, column=1, padx=6, pady=6)
 
-        ttk.Button(sales_container, text="Зафиксировать продажу", 
-                 command=self.process_sale_transaction).grid(row=3, column=0, columnspan=2, pady=12)
+        ttk.Button(sales_container, text="Зафиксировать продажу", command=self.process_sale_transaction).grid(row=3, column=0, columnspan=2, pady=12)
 
     def create_sales_history_interface(self):
         filter_container = ttk.Frame(self.sales_history_tab)
@@ -126,8 +128,7 @@ class PharmacyApplication:
         self.history_end_date = DateEntry(filter_container, date_pattern='yyyy-mm-dd')
         self.history_end_date.pack(side='left', padx=6)
         
-        ttk.Button(filter_container, text="Обновить историю", 
-                 command=self.refresh_sales_history).pack(side='left', padx=12)
+        ttk.Button(filter_container, text="Обновить историю", command=self.refresh_sales_history).pack(side='left', padx=12)
 
         columns = ('ID', 'Препарат', 'Продано', 'Сумма', 'Дата операции')
         self.sales_history_treeview = ttk.Treeview(self.sales_history_tab, columns=columns, show='headings', height=15)
@@ -138,6 +139,25 @@ class PharmacyApplication:
             
         self.sales_history_treeview.pack(padx=12, pady=12, fill='both', expand=True)
         self.refresh_sales_history()
+
+    def create_statistics_interface(self):
+        stats_container = ttk.Frame(self.statistics_tab)
+        stats_container.pack(pady=12, fill='both', expand=True)
+
+        self.total_income_label = ttk.Label(stats_container, text="Общая выручка: 0 руб.")
+        self.total_income_label.pack(pady=6)
+
+        self.total_sales_label = ttk.Label(stats_container, text="Общее количество продаж: 0")
+        self.total_sales_label.pack(pady=6)
+
+        ttk.Label(stats_container, text="Топ-5 продаваемых препаратов:").pack(pady=6)
+        self.top_medicines_treeview = ttk.Treeview(stats_container, columns=('Препарат', 'Продано'), show='headings', height=7)
+        self.top_medicines_treeview.heading('Препарат', text='Препарат')
+        self.top_medicines_treeview.heading('Продано', text='Продано')
+        self.top_medicines_treeview.pack(padx=12, pady=6, fill='both', expand=True)
+
+        ttk.Button(stats_container, text="Обновить статистику", command=self.refresh_statistics).pack(pady=12)
+        self.refresh_statistics()
 
     def add_new_medicine(self):
         input_values = [
@@ -235,10 +255,10 @@ class PharmacyApplication:
                                          (medicine_identifier, sold_quantity, transaction_date, total_amount)
                                          VALUES (?, ?, ?, ?)''', 
                                          (medicine_identifier, transaction_quantity, transaction_date, total_transaction_amount))
-                                         
             self.database_connection.commit()
             self.refresh_medicines_list()
             self.refresh_sales_history()
+            self.refresh_statistics()
             messagebox.showinfo("Операция успешна", "Продажа зарегистрирована")
             
         except Exception as error:
@@ -270,6 +290,26 @@ class PharmacyApplication:
         self.database_cursor.execute(history_query, (start_date_filter, end_date_filter))
         for historical_record in self.database_cursor.fetchall():
             self.sales_history_treeview.insert('', 'end', values=historical_record)
+
+    def refresh_statistics(self):
+        self.database_cursor.execute('SELECT SUM(total_amount), SUM(sold_quantity) FROM sales_records')
+        stats = self.database_cursor.fetchone()
+        total_income = stats[0] if stats[0] else 0
+        total_sales = stats[1] if stats[1] else 0
+
+        self.total_income_label.config(text=f"Общая выручка: {total_income:.2f} руб.")
+        self.total_sales_label.config(text=f"Общее количество продаж: {total_sales}")
+
+        self.top_medicines_treeview.delete(*self.top_medicines_treeview.get_children())
+        self.database_cursor.execute('''SELECT medicines_inventory.medicine_name, SUM(sales_records.sold_quantity) 
+                                         FROM sales_records 
+                                         JOIN medicines_inventory 
+                                         ON sales_records.medicine_identifier = medicines_inventory.medicine_id
+                                         GROUP BY medicine_identifier 
+                                         ORDER BY SUM(sales_records.sold_quantity) DESC 
+                                         LIMIT 5''')
+        for row in self.database_cursor.fetchall():
+            self.top_medicines_treeview.insert('', 'end', values=row)
 
     def load_selected_medicine_data(self, event):
         selected_items = self.medicines_treeview.selection()
